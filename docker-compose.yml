@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: miniapp-serg
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-8090}:${PORT:-8090}"

@@ -1,0 +1,11 @@
+/node_models
+.idea
+.env
+node_modules/
+package-lock.json
+package.json
+logs/
+.DS_Store
+send.log
+supabase_backups/
+/services/System/sendmessage.js
