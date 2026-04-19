@@ -158,7 +158,7 @@
  *                   type: string
  *                 card_key:
  *                   type: string
- *                   description: `id` карты или `id*` для перевёрнутой
+ *                   description: `ID карты или ID со звёздочкой для перевёрнутой карты
  *                 interpretation:
  *                   type: string
  *             example:
