@@ -33,6 +33,15 @@ module.exports = {
         res.status(500).json({ error: error.message });
     }
   },
+  vkVotesCrystalPrice: async(req,res) => {
+    try{
+      const crystals = await crystalPriceStars.crystalVkVotes();
+      res.json(crystals);
+    } catch (error) {
+        logger.error(`[SystemFunctionHandler, vkVotesCrystalPrice] Ошибка: ${error.message}`);
+        res.status(500).json({ error: error.message });
+    }
+  },
   /*
   checkCrystalUser: async(req,res) => {
     try{

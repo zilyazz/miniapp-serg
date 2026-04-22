@@ -28,7 +28,26 @@ async function crystalStars() {
 
   return stars;
 }
+
+async function crystalVkVotes() {
+  const { data: votes, error: votesError } = await supabase
+    .from('crystal_purchase_options')
+    .select('id,crystals,price_vk_votes,price_stars')
+    .order('crystals');
+  if (votesError) {
+    logger.error(`[crystalBuyTableService, crystalVkVotes] Ошибка при обращении к crystal_purchase_options: ${votesError.message}`);
+    throw votesError;
+  }
+
+  return (votes || []).map((item) => ({
+    id: item.id,
+    crystals: item.crystals,
+    price_vk_votes: item.price_vk_votes ?? item.price_stars ?? null,
+  }));
+}
+
 module.exports = {
   crystalMoney,
-  crystalStars
+  crystalStars,
+  crystalVkVotes
 }

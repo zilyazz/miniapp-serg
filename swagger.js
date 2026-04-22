@@ -36,8 +36,7 @@ const options = {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          // ⚠️ Telegram WebApp сам JWT не выдаёт. Если у тебя реально JWT — он ваш, серверный.
-          description: 'Серверный JWT-токен. Формат: "Bearer {token}". Если API вернул error=auth_token_expired, фронт должен вызвать POST /auth/refresh, получить новый token, заменить Bearer-токен и повторить исходный запрос. При проблеме конфигурации auth middleware может вернуть error=auth_config_invalid.',
+          description: 'Серверный JWT-токен. Формат: "Bearer {token}". Если API вернул error=auth_token_expired, фронт должен вызвать refresh-ручку своей платформы: для Telegram это POST /auth/refresh, для VK это POST /auth/vk/refresh. После этого нужно заменить Bearer-токен и повторить исходный запрос. При проблеме конфигурации auth middleware может вернуть error=auth_config_invalid.',
         },
       },
 

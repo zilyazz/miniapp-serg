@@ -40,6 +40,42 @@
 
 /**
  * @openapi
+ * /auth/vk/refresh:
+ *   post:
+ *     summary: Перевыпустить JWT по валидным launch params VK Mini Apps
+ *     description: |
+ *       Используется, когда JWT истёк внутри VK Mini App.
+ *       В body нужно передавать сырую строку launch params со `sign`.
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [launchParams]
+ *             properties:
+ *               launchParams:
+ *                 type: string
+ *                 description: Сырая строка параметров запуска VK Mini Apps, включая `sign`
+ *     responses:
+ *       200:
+ *         description: Новый токен
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [token]
+ *               properties:
+ *                 token:
+ *                   type: string
+ *                   description: Новый JWT
+ *             example:
+ *               token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ */
+
+/**
+ * @openapi
  * /initUserDailyRuneHandler:
  *   post:
  *     summary: Инициализация пользователя и состояние карты Таро дня
@@ -132,6 +168,88 @@
  *                   name: "Император (перевернутая)"
  *                   card_key: "4*"
  *                   interpretation: "Сегодня важно не давить на события и не пытаться контролировать всех вокруг."
+ */
+
+/**
+ * @openapi
+ * /vk/init:
+ *   post:
+ *     summary: Инициализация пользователя во VK Mini Apps и состояние карты Таро дня
+ *     description: |
+ *       Главная стартовая ручка приложения для VK Mini Apps.
+ *       На успешной инициализации сервер:
+ *       1. Проверяет подпись `sign` в launch params VK
+ *       2. Создаёт или обновляет пользователя
+ *       3. Возвращает JWT
+ *       4. Возвращает текущее состояние карты Таро дня
+ *
+ *       Если карта дня ещё не открыта, сервер вернёт:
+ *       - `name = "Скрытая карта"`
+ *       - `card_key = null`
+ *       - `interpretation = null`
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [launchParams]
+ *             properties:
+ *               launchParams:
+ *                 type: string
+ *                 description: Сырая строка launch params VK Mini Apps со `sign`
+ *               referralParam:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Инициализация успешна
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - type: object
+ *                   required: [allow]
+ *                   properties:
+ *                     allow:
+ *                       type: boolean
+ *                       example: false
+ *                 - type: object
+ *                   required: [token, score_crystal, newUserCreated, subscriptionExpired, sound, allow, name, card_key, interpretation]
+ *                   properties:
+ *                     token:
+ *                       type: string
+ *                     score_crystal:
+ *                       type: integer
+ *                     newUserCreated:
+ *                       type: boolean
+ *                     subscriptionExpired:
+ *                       type: boolean
+ *                     sound:
+ *                       type: integer
+ *                     allow:
+ *                       type: boolean
+ *                     name:
+ *                       type: string
+ *                     card_key:
+ *                       type: string
+ *                       nullable: true
+ *                     interpretation:
+ *                       type: string
+ *                       nullable: true
+ *             examples:
+ *               hidden_card:
+ *                 value:
+ *                   token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *                   score_crystal: 120
+ *                   newUserCreated: false
+ *                   subscriptionExpired: false
+ *                   sound: 1
+ *                   allow: true
+ *                   name: "Скрытая карта"
+ *                   card_key: null
+ *                   interpretation: null
  */
 
 /**
@@ -733,6 +851,34 @@
 
 /**
  * @openapi
+ * /crystalVKVotes:
+ *   get:
+ *     summary: Пакеты кристаллов за голоса VK
+ *     tags: [Crystal]
+ *     responses:
+ *       200:
+ *         description: Список пакетов
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   crystals:
+ *                     type: integer
+ *                   price_vk_votes:
+ *                     type: integer
+ *             example:
+ *               - id: 1
+ *                 crystals: 100
+ *                 price_vk_votes: 15
+ */
+
+/**
+ * @openapi
  * /sound:
  *   post:
  *     summary: Изменить настройку звука
@@ -847,6 +993,53 @@
 
 /**
  * @openapi
+ * /createInvoiceVKVotes:
+ *   post:
+ *     summary: Создать VK order для оплаты кристаллов голосами
+ *     description: |
+ *       Возвращает `vk_item`, который фронт должен передать в `VKWebAppShowOrderBox`.
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [id]
+ *             properties:
+ *               id:
+ *                 type: integer
+ *     responses:
+ *       200:
+ *         description: VK order создан
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [vk_item, amount_votes, payment_id]
+ *               properties:
+ *                 vk_item:
+ *                   type: string
+ *                 amount_votes:
+ *                   type: integer
+ *                 payment_id:
+ *                   type: string
+ *                 title:
+ *                   type: string
+ *                 description:
+ *                   type: string
+ *             example:
+ *               vk_item: "payment_vk_2_1711791200000_ab12cd34ef56"
+ *               amount_votes: 15
+ *               payment_id: "vk_2_1711791200000_ab12cd34ef56"
+ *               title: "Покупка кристаллов"
+ *               description: "100 кристаллов"
+ */
+
+/**
+ * @openapi
  * /createInvoiceCrypto:
  *   post:
  *     summary: Создать invoice для оплаты кристаллов криптой
@@ -924,6 +1117,21 @@
  *   post:
  *     summary: Telegram payment webhook
  *     description: Служебный webhook для Telegram-оплаты. Внешний фронт его не вызывает.
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: Webhook обработан
+ */
+
+/**
+ * @openapi
+ * /webhooks/vk/payments:
+ *   post:
+ *     summary: VK payments webhook для голосов
+ *     description: |
+ *       Служебный webhook для оплаты голосами VK.
+ *       Поддерживает `get_item` и `order_status_change`.
+ *       Внешний фронт его не вызывает.
  *     tags: [Payments]
  *     responses:
  *       200:

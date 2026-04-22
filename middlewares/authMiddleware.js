@@ -25,10 +25,14 @@ module.exports = function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded?.telegramId || typeof decoded.telegramId !== 'string') {
+    const userKey = decoded?.userKey || decoded?.telegramId;
+
+    if (!userKey || typeof userKey !== 'string') {
       return res.status(401).json({ error: 'auth_token_invalid' });
     }
-    req.telegramId = decoded.telegramId;
+
+    req.userKey = userKey;
+    req.telegramId = userKey;
     next();
   } catch (error) {
     console.error('Ошибка при верификации токена:', error.message);

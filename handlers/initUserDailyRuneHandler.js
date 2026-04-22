@@ -84,6 +84,7 @@ module.exports = {
       if (
         code === 'telegram_bot_token_missing' ||
         code === 'jwt_secret_missing' ||
+        code === 'auth_user_key_missing' ||
         code === 'user_hash_salt_missing'
       ) {
         return res.status(500).json({ error: code });

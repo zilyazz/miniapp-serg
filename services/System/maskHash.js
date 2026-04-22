@@ -2,7 +2,17 @@
 
 const crypto = require('crypto');
 
-function maskTelegramId(telegramId) {
+function normalizeIdentityValue(identity, provider = 'telegram') {
+  const normalizedProvider = String(provider || 'telegram').trim().toLowerCase();
+
+  if (normalizedProvider === 'vk') {
+    return `vk:${identity}`;
+  }
+
+  return String(identity);
+}
+
+function maskTelegramId(telegramId, provider = 'telegram') {
   const secret = process.env.USER_HASH_SALT;
   if (!secret) {
     const err = new Error('user_hash_salt_missing');
@@ -17,7 +27,7 @@ function maskTelegramId(telegramId) {
   }
 
   return crypto.createHash('sha256')
-    .update(telegramId.toString() + secret)
+    .update(normalizeIdentityValue(telegramId, provider) + secret)
     .digest('hex');
 }
 
