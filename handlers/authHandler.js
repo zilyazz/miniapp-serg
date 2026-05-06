@@ -45,8 +45,7 @@ module.exports = {
 
   refreshVKToken: async (req, res) => {
     try {
-      const { launchParams } = req.body || {};
-      const { token } = await vkInitService.issueTokenFromLaunchParams(launchParams);
+      const { token } = await vkInitService.issueTokenFromLaunchParams(req.body || {});
 
       return res.status(200).json({
         token,
@@ -55,6 +54,11 @@ module.exports = {
       logger.error(`[authHandler, refreshVKToken] ${error.message}`);
 
       const code = error?.code || error?.message;
+      if (code === 'vk_launch_params_missing' || code === 'vk_launch_params_sign_missing') {
+        const bodyKeys = req.body && typeof req.body === 'object' ? Object.keys(req.body).slice(0, 20) : [];
+        logger.error(`[authHandler, refreshVKToken] body keys: ${bodyKeys.join(',') || 'none'}`);
+      }
+
       if (
         code === 'vk_launch_params_missing' ||
         code === 'vk_launch_params_sign_missing' ||

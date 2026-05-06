@@ -8,8 +8,8 @@ const FOR_UPDATE = process.env.FOR_UPDATE === '1' || process.env.FOR_UPDATE === 
 module.exports = {
   initVK: async (req, res) => {
     try {
-      const { launchParams, referralParam } = req.body || {};
-      const { vkId, token, realVkId } = await vkInitService.initVKUser(launchParams);
+      const { referralParam } = req.body || {};
+      const { vkId, token, realVkId } = await vkInitService.initVKUser(req.body || {});
 
       if (FOR_UPDATE) {
         return res.status(200).json({ allow: false });
@@ -56,6 +56,11 @@ module.exports = {
       logger.error(`VK инициализация: ${error.message}`);
 
       const code = error?.code || error?.message;
+      if (code === 'vk_launch_params_missing' || code === 'vk_launch_params_sign_missing') {
+        const bodyKeys = req.body && typeof req.body === 'object' ? Object.keys(req.body).slice(0, 20) : [];
+        logger.error(`VK инициализация body keys: ${bodyKeys.join(',') || 'none'}`);
+      }
+
       if (
         code === 'vk_launch_params_missing' ||
         code === 'vk_launch_params_sign_missing' ||

@@ -5,6 +5,77 @@ const tokenService = require('./tokenService');
 const VK_APP_SECRET = process.env.VK_APP_SECRET;
 const VK_APP_ID = process.env.VK_APP_ID ? Number(process.env.VK_APP_ID) : null;
 
+function objectToQueryString(payload) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(payload || {})) {
+    if (value == null) {
+      continue;
+    }
+
+    if (typeof value === 'object') {
+      continue;
+    }
+
+    params.set(key, String(value));
+  }
+
+  return params.toString();
+}
+
+function normalizeLaunchParamsInput(input) {
+  if (typeof input === 'string') {
+    return input.trim();
+  }
+
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return '';
+  }
+
+  const directCandidates = [
+    input.launchParams,
+    input.launch_params,
+    input.vkLaunchParams,
+    input.vk_launch_params,
+    input.search,
+    input.query,
+    input.raw,
+    input.href,
+    input.url,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  const nestedCandidates = [
+    input.launchParams,
+    input.launch_params,
+    input.vkLaunchParams,
+    input.vk_launch_params,
+  ];
+
+  for (const candidate of nestedCandidates) {
+    if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      const nestedQuery = objectToQueryString(candidate);
+      if (nestedQuery) {
+        return nestedQuery;
+      }
+    }
+  }
+
+  const hasVKShape = Object.prototype.hasOwnProperty.call(input, 'sign')
+    || Object.keys(input).some((key) => key.startsWith('vk_'));
+
+  if (hasVKShape) {
+    return objectToQueryString(input);
+  }
+
+  return '';
+}
+
 function buildQueryString(values) {
   const parts = [];
 
@@ -46,13 +117,14 @@ function parseAndValidateLaunchParams(launchParams) {
     throw err;
   }
 
-  if (!launchParams || typeof launchParams !== 'string') {
+  const normalizedInput = normalizeLaunchParamsInput(launchParams);
+  if (!normalizedInput) {
     const err = new Error('vk_launch_params_missing');
     err.code = 'vk_launch_params_missing';
     throw err;
   }
 
-  let normalizedLaunchParams = launchParams.trim();
+  let normalizedLaunchParams = normalizedInput;
   const queryIndex = normalizedLaunchParams.indexOf('?');
   if (queryIndex >= 0) {
     normalizedLaunchParams = normalizedLaunchParams.slice(queryIndex + 1);
