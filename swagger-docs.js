@@ -1076,6 +1076,82 @@
 
 /**
  * @openapi
+ * /payments/yookassa/card/invoice:
+ *   post:
+ *     summary: Создать ссылку YooKassa только для оплаты картой
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [id, email]
+ *             properties:
+ *               id:
+ *                 type: integer
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Ссылка на оплату создана
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [invoice_url, payment_id]
+ *               properties:
+ *                 invoice_url:
+ *                   type: string
+ *                 payment_id:
+ *                   type: string
+ *             example:
+ *               invoice_url: "https://yoomoney.ru/checkout/payments/v2/contract?orderId=..."
+ *               payment_id: "yk_card_2_1711791200000_ab12cd34ef56"
+ */
+
+/**
+ * @openapi
+ * /payments/yookassa/yoomoney/invoice:
+ *   post:
+ *     summary: Создать ссылку YooKassa только для оплаты YooMoney
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [id, email]
+ *             properties:
+ *               id:
+ *                 type: integer
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Ссылка на оплату создана
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [invoice_url, payment_id]
+ *               properties:
+ *                 invoice_url:
+ *                   type: string
+ *                 payment_id:
+ *                   type: string
+ *             example:
+ *               invoice_url: "https://yoomoney.ru/checkout/payments/v2/contract?orderId=..."
+ *               payment_id: "yk_ym_2_1711791200000_ab12cd34ef56"
+ */
+
+/**
+ * @openapi
  * /checkPayment:
  *   post:
  *     summary: Проверить статус платежа
@@ -1117,6 +1193,18 @@
  *   post:
  *     summary: Telegram payment webhook
  *     description: Служебный webhook для Telegram-оплаты. Внешний фронт его не вызывает.
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: Webhook обработан
+ */
+
+/**
+ * @openapi
+ * /webhooks/yookassa:
+ *   post:
+ *     summary: YooKassa webhook
+ *     description: Служебный webhook для подтверждения оплаты через YooKassa. Внешний фронт его не вызывает.
  *     tags: [Payments]
  *     responses:
  *       200:

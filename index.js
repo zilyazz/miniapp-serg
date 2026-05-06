@@ -143,10 +143,15 @@ app.post('/checkPayment', authMiddleware, paymentStatus.statPayment);
 //Оплата через бота (кристаллы)
 const paymentHandlerTGBot = require('./handlers/payment/paymentTGBotHandler');
 const paymentHandlerVK = require('./handlers/payment/paymentVKHandler');
+const paymentYooKassaHandler = require('./handlers/payment/paymentYooKassaHandler');
+const yookassaWebhookHandler = require('./handlers/payment/yookassaWebhookHandler');
 app.post('/createInvoice', authMiddleware,paymentHandlerTGBot.createCrystalPayment);  
 app.post('/createInvoiceStars', authMiddleware, paymentHandlerTGBot.createCrystalPaymentStars); //звезды  
 app.post('/createInvoiceCrypto',  authMiddleware, paymentHandlerTGBot.createCrystalPaymentCrypto);  //крипты
 app.post('/createInvoiceVKVotes',  authMiddleware, paymentHandlerVK.createCrystalPaymentVKVotes);  // голоса VK
+app.post('/payments/yookassa/card/invoice', authMiddleware, paymentYooKassaHandler.createCardInvoice);
+app.post('/payments/yookassa/yoomoney/invoice', authMiddleware, paymentYooKassaHandler.createYooMoneyInvoice);
+app.post('/webhooks/yookassa', yookassaWebhookHandler.handleWebhook);
 
 
 //Таро
