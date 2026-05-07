@@ -12,8 +12,8 @@ let horoscopeRunning = false;
 
 if (CRON_ENABLED) {
 // Гороскопы: основной прогон каждый день в 00:05
-cron.schedule('0 1-8 * * *', async () => {
-//cron.schedule('*/1 * * * *', async () => {  
+//cron.schedule('0 1-8 * * *', async () => {
+cron.schedule('*/1 * * * *', async () => {  
   if (horoscopeRunning) return;
   horoscopeRunning = true;
   try {
