@@ -3,7 +3,7 @@ const path = require('path');
 const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
 const axios = require('axios');
-const { LIMITS, PRICES } = require('../../utils/constants');
+const { LIMITS, PRICES, NEURAL } = require('../../utils/constants');
 const logEvent = require('../System/CJM');
 const tarotRaw = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../../runeLibr/tarotCards.json'), 'utf8')
@@ -352,7 +352,7 @@ async function callNeuralFollowup(history, newCard, question, premium) {
       model: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
     };
   
-    const data = await axios.post('http://localhost:8080/api/v1/tarot/followup', payload);
+    const data = await axios.post(NEURAL.TAROT_FOLLOWUP_URL, payload);
 
     let text = data.data.interpretation;
 

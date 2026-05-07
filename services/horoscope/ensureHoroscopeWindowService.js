@@ -1,7 +1,7 @@
 // services/horoscope/ensureHoroscopeWindowService.js
 const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
-const { HOROSCOPE } = require('../../utils/constants');
+const { HOROSCOPE, NEURAL } = require('../../utils/constants');
 
 const { DateTime } = require('luxon');
 const axios = require('axios');
@@ -392,7 +392,7 @@ async function callNeuralWithRetry(promptPayload, allowedTagsSet, allowedScoreKe
 
 async function callHoroscopeNeural(payload) {
   // Подстрой под свой нейро-роут. Я делаю аналогично твоему sonnik callNeural().
-  const { data } = await axios.post('http://localhost:8080/api/v1/horoscope/generate', {
+  const { data } = await axios.post(NEURAL.HOROSCOPE_GENERATE_URL, {
     payload,
     model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
   });

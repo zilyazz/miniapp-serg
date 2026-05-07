@@ -3,6 +3,8 @@
  * 💎 Основные игровые и сервисные константы
  */
 
+const NEURAL_BASE_URL = (process.env.NEURAL_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
+
 module.exports = {
   /** ===========================
    * 🧾 ЦЕНЫ / РАСХОДЫ
@@ -103,7 +105,16 @@ module.exports = {
     FUTURE_DAYS: 3,
     LIMIT_HISTORY: 50,
     LIMIT_HISTORY_OFFSET: 0,
-    LUCKY_NEURAL_URL: 'http://localhost:8080/api/v1/horoscope/lucky'
+    LUCKY_NEURAL_URL: process.env.HOROSCOPE_LUCKY_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/horoscope/lucky`
+  },
+
+  NEURAL: {
+    BASE_URL: NEURAL_BASE_URL,
+    RUNES_URL: process.env.RUNES_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/divination/encode`,
+    TAROT_INTERPRET_URL: process.env.TAROT_INTERPRET_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/tarot/interpret`,
+    TAROT_FOLLOWUP_URL: process.env.TAROT_FOLLOWUP_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/tarot/followup`,
+    TAROT_DAY_URL: process.env.TAROT_DAY_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/tarot/day`,
+    HOROSCOPE_GENERATE_URL: process.env.HOROSCOPE_GENERATE_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/horoscope/generate`
   },
   
 };

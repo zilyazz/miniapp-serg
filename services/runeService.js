@@ -4,7 +4,7 @@ const supabase = require('../supabaseClient');
 const axios = require('axios');
 const logger = require('../logger');
 const logEvent = require('./System/CJM');
-const { PRICES } = require('../utils/constants');
+const { PRICES, NEURAL } = require('../utils/constants');
 
 // **Библиотека с рунами**
 const runesFlatLibrary = JSON.parse(
@@ -65,7 +65,7 @@ async function refundRuneLayout(telegramId, amount) {
 async function getNeuralInterpretation(runes, theme, type, premium) {
   try {
     for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
-      const response = await axios.post('http://localhost:8080/api/v1/divination/encode', {
+      const response = await axios.post(NEURAL.RUNES_URL, {
         runes,
         theme,
         type,

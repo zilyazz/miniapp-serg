@@ -3,7 +3,7 @@ const path = require('path');
 const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
 const axios = require('axios');
-const {PRICES} = require('../../utils/constants');
+const { PRICES, NEURAL } = require('../../utils/constants');
 const logEvent = require('../System/CJM');
 const tarotRaw = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../../runeLibr/tarotCards.json'), 'utf8')
@@ -168,7 +168,7 @@ async function callNeural(сards, question, spreadType, premium) {
   };
 
   for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
-    const data = await axios.post('http://localhost:8080/api/v1/tarot/interpret', payload);
+    const data = await axios.post(NEURAL.TAROT_INTERPRET_URL, payload);
 
     let text = data?.data.interpretation;
 

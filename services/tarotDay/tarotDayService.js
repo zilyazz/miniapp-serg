@@ -4,11 +4,12 @@ const axios = require('axios');
 const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
 const logEvent = require('../System/CJM');
+const { NEURAL } = require('../../utils/constants');
 
 const TAROT_DAY_TABLE = process.env.TAROT_DAY_TABLE || 'users_tarot_day';
 const PROMPTS_TABLE = process.env.AI_PROMPTS_TABLE || 'ai_prompts';
 const TAROT_DAY_PROMPT_CODE = process.env.TAROT_DAY_PROMPT_CODE || 'tarot_day';
-const TAROT_DAY_NEURAL_URL = process.env.TAROT_DAY_NEURAL_URL || 'http://localhost:8080/api/v1/tarot/day';
+const TAROT_DAY_NEURAL_URL = NEURAL.TAROT_DAY_URL;
 const TAROT_DAY_TTL_MS = Number(process.env.TAROT_DAY_TTL_MS || 24 * 60 * 60 * 1000);
 const MAX_ATTEMPTS = 2;
 
