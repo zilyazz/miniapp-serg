@@ -173,7 +173,13 @@ app.post('/horoscope/buyFutureHoroscope', authMiddleware, horoscope.buyFutureHor
 app.post('/horoscope/luckyDay', authMiddleware, horoscope.pickLuckyDay); //удачный день  //✅    
 app.post('/horoscope/lucky/history', authMiddleware, horoscope.luckyDayHistoryList);  //✅    
 
-
+//Магазин
+const shopOpen = require('./handlers/shop/shopItemsHandlers');
+app.post('/shop', authMiddleware, shopOpen.openShop); //Открытие 
+const buySopItems = require('./handlers/shop/buyShopItemsHandler');  
+app.post('/shop/buy', authMiddleware,buySopItems.buyItems); // Покупка товара 
+const equipObjInventory = require('./handlers/shop/equipObjectHandler');
+app.post('/equipObject', authMiddleware, equipObjInventory.getInventory); //Надеть товар 
 
 require('./cronJob'); 
 // Запуск сервера /*

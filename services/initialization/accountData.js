@@ -21,6 +21,25 @@ async function accountData(telegramId, referralParam, realTelegramId, username =
     throw rpcError;
   }
 
+  const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+  if (!row) throw new Error('init_user_all returned no data');
+
+  const userId = row.out_user_id;
+
+  // Экип
+  const { data: equip, error: equipError } = await supabase
+    .from('user_equipment')
+    .select('type,item_id')
+    .eq('user_id', userId);
+  if (equipError) {
+    logger.error(`[accountData] user_equipment select for ${telegramId}: ${equipError.message}`);
+    throw equipError;
+  }
+  const equipMap = {};
+  if (Array.isArray(equip)) {
+    for (const item of equip) equipMap[item.type] = item.item_id;
+  }
+
   if (username !== null) {
     const { error: usnikError } = await supabase.rpc('username_sve_upd', {
       p_telegram_real: realTelegramId,
@@ -32,9 +51,7 @@ async function accountData(telegramId, referralParam, realTelegramId, username =
     }
   }
 
-  const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-  if (!row) throw new Error('init_user_all returned no data');
-  return finalizeAccountData(row, telegramId);
+  return finalizeAccountData(row, equipMap, telegramId);
 }
 
 module.exports = { accountData };

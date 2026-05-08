@@ -122,7 +122,7 @@
  *                       type: boolean
  *                       example: false
  *                 - type: object
- *                   required: [token, score_crystal, newUserCreated, subscriptionExpired, sound, allow, name, card_key, interpretation]
+ *                   required: [token, score_crystal, newUserCreated, subscriptionExpired, equip, sound, allow, name, card_key, interpretation]
  *                   properties:
  *                     token:
  *                       type: string
@@ -134,6 +134,13 @@
  *                       type: boolean
  *                     sound:
  *                       type: integer
+ *                     equip:
+ *                       type: object
+ *                       required: [background]
+ *                       properties:
+ *                         background:
+ *                           type: integer
+ *                           description: ID экипированного background
  *                     allow:
  *                       type: boolean
  *                     name:
@@ -152,6 +159,8 @@
  *                   score_crystal: 120
  *                   newUserCreated: false
  *                   subscriptionExpired: false
+ *                   equip:
+ *                     background: 1
  *                   sound: 1
  *                   allow: true
  *                   name: "Скрытая карта"
@@ -163,6 +172,8 @@
  *                   score_crystal: 120
  *                   newUserCreated: false
  *                   subscriptionExpired: false
+ *                   equip:
+ *                     background: 6
  *                   sound: 1
  *                   allow: true
  *                   name: "Император (перевернутая)"
@@ -216,7 +227,7 @@
  *                       type: boolean
  *                       example: false
  *                 - type: object
- *                   required: [token, score_crystal, newUserCreated, subscriptionExpired, sound, allow, name, card_key, interpretation]
+ *                   required: [token, score_crystal, newUserCreated, subscriptionExpired, equip, sound, allow, name, card_key, interpretation]
  *                   properties:
  *                     token:
  *                       type: string
@@ -228,6 +239,13 @@
  *                       type: boolean
  *                     sound:
  *                       type: integer
+ *                     equip:
+ *                       type: object
+ *                       required: [background]
+ *                       properties:
+ *                         background:
+ *                           type: integer
+ *                           description: ID экипированного background
  *                     allow:
  *                       type: boolean
  *                     name:
@@ -245,6 +263,8 @@
  *                   score_crystal: 120
  *                   newUserCreated: false
  *                   subscriptionExpired: false
+ *                   equip:
+ *                     background: 1
  *                   sound: 1
  *                   allow: true
  *                   name: "Скрытая карта"
@@ -688,6 +708,231 @@
  *               place_name: "Самара, Самарская область, Россия"
  *               name: "Илья"
  *               sex: "female"
+ */
+
+/**
+ * @openapi
+ * /shop:
+ *   post:
+ *     summary: Магазин — список товаров по типу
+ *     description: |
+ *       Возвращает товары выбранного типа. Сейчас используется `background`.
+ *
+ *       Сортировка на сервере:
+ *       1. `owned`
+ *       2. `available`
+ *       3. `locked`
+ *
+ *       Внутри одного статуса товары сортируются по редкости: `standart`, `rare`, `epic`, `legendary`.
+ *       Пользователь определяется по `Authorization: Bearer <token>`.
+ *     tags: [Shop]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               type:
+ *                 type: string
+ *                 description: Тип товаров
+ *                 enum: [background]
+ *                 default: background
+ *           example:
+ *             type: "background"
+ *     responses:
+ *       200:
+ *         description: Список товаров выбранного типа
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 required: [id, type, name, description, price_crystal, rarity, status, equipped]
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   type:
+ *                     type: string
+ *                     enum: [background]
+ *                   name:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *                   price_crystal:
+ *                     type: integer
+ *                     description: Цена в кристаллах
+ *                   rarity:
+ *                     type: string
+ *                     enum: [standart, rare, epic, legendary]
+ *                   status:
+ *                     type: string
+ *                     enum: [owned, available, locked]
+ *                   equipped:
+ *                     type: boolean
+ *             example:
+ *               - id: 1
+ *                 type: "background"
+ *                 name: "Стандартный фон"
+ *                 description: "Базовый фон"
+ *                 price_crystal: 0
+ *                 rarity: "standart"
+ *                 status: "owned"
+ *                 equipped: true
+ *               - id: 5
+ *                 type: "background"
+ *                 name: "Кристальный фон"
+ *                 description: "Фон с кристаллами"
+ *                 price_crystal: 200
+ *                 rarity: "epic"
+ *                 status: "available"
+ *                 equipped: false
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+
+/**
+ * @openapi
+ * /shop/buy:
+ *   post:
+ *     summary: Купить товар в магазине
+ *     description: |
+ *       Покупать можно только товары со статусом `available`.
+ *       Пользователь определяется по `Authorization: Bearer <token>`.
+ *       В текущей версии магазина покупка идёт за кристаллы.
+ *
+ *       Бизнес-ошибки возвращаются с HTTP 200 и отличаются по полю `status`.
+ *       Если RPC вернул неизвестный статус, сервер вернёт `status="error"` и поле `message`.
+ *     tags: [Shop]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [itemId]
+ *             properties:
+ *               itemId:
+ *                 type: integer
+ *                 description: ID товара из ответа `/shop`
+ *           example:
+ *             itemId: 5
+ *     responses:
+ *       200:
+ *         description: Результат покупки
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - type: object
+ *                   required: [status]
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [ok, already_bought, invalid_price, not_enough_points]
+ *                 - type: object
+ *                   required: [status, crystalOffers]
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [not_enough_crystals]
+ *                     crystalOffers:
+ *                       type: array
+ *                       description: Офферы покупки кристаллов
+ *                       items:
+ *                         type: object
+ *                         required: [crystals, price_money]
+ *                         properties:
+ *                           crystals:
+ *                             type: integer
+ *                           price_money:
+ *                             type: number
+ *                 - type: object
+ *                   required: [status, message]
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [error]
+ *                     message:
+ *                       type: string
+ *             examples:
+ *               ok:
+ *                 value:
+ *                   status: "ok"
+ *               already_bought:
+ *                 value:
+ *                   status: "already_bought"
+ *               invalid_price:
+ *                 value:
+ *                   status: "invalid_price"
+ *               not_enough_points:
+ *                 summary: Legacy-статус из старой RPC-логики монет
+ *                 value:
+ *                   status: "not_enough_points"
+ *               not_enough_crystals:
+ *                 summary: Недостаточно кристаллов
+ *                 value:
+ *                   status: "not_enough_crystals"
+ *                   crystalOffers:
+ *                     - crystals: 100
+ *                       price_money: 99
+ *                     - crystals: 250
+ *                       price_money: 199
+ *               unknown_status:
+ *                 value:
+ *                   status: "error"
+ *                   message: "Unknown status: some_status"
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+
+/**
+ * @openapi
+ * /equipObject:
+ *   post:
+ *     summary: Надеть предмет
+ *     description: |
+ *       Надевает предмет из инвентаря пользователя.
+ *       Пользователь определяется по `Authorization: Bearer <token>`.
+ *     tags: [Shop]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [item_id]
+ *             properties:
+ *               item_id:
+ *                 type: integer
+ *                 description: ID предмета из магазина/инвентаря
+ *           example:
+ *             item_id: 5
+ *     responses:
+ *       200:
+ *         description: Результат RPC `equip_item`
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: string
+ *               description: Статус экипировки
+ *               enum: [ok, not_owned, invalid_item]
+ *             examples:
+ *               ok:
+ *                 value: "ok"
+ *               not_owned:
+ *                 value: "not_owned"
+ *               invalid_item:
+ *                 value: "invalid_item"
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
  */
 
 /**

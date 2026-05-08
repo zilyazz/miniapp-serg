@@ -1,7 +1,7 @@
 const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
 
-async function finalizeAccountData(row, internalUserKey) {
+async function finalizeAccountData(row, equipMap, internalUserKey) {
   if (!row) {
     throw new Error('init_user_all returned no data');
   }
@@ -58,6 +58,7 @@ async function finalizeAccountData(row, internalUserKey) {
     subscriptionExpired,
     sound: row.sound || 1,
     allow: true,
+    equip: equipMap,
   };
 }
 
