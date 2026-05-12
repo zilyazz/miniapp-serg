@@ -1,0 +1,2497 @@
+openapi: 3.0.0
+info:
+  title: Telegram Web App API Runes
+  version: 1.0.0
+  description: API для Telegram Web App - приложения для работы с рунами, таро, раскладами и другими мистическими сервисами
+  contact:
+    name: API Support
+servers:
+  - url: /
+    description: Current host
+  - url: http://localhost:8090
+    description: Local development server
+  - url: https://dev.shepsmystics.ru
+    description: Cloud development server
+  - url: https://shepsmystics.ru
+    description: Production server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Серверный JWT-токен. Формат: "Bearer {token}". Если API вернул error=auth_token_expired, фронт должен вызвать
+        refresh-ручку своей платформы: для Telegram это POST /auth/refresh, для VK это POST /auth/vk/refresh. После
+        этого нужно заменить Bearer-токен и повторить исходный запрос. При проблеме конфигурации auth middleware может
+        вернуть error=auth_config_invalid.
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Код ошибки
+          example: internal_error
+        message:
+          type: string
+          description: Описание ошибки (опционально)
+          example: Что-то пошло не так
+        price:
+          type: number
+          description: Требуемая сумма/стоимость (если актуально)
+          example: 40
+          nullable: true
+        max_size:
+          type: number
+          description: Максимальный размер файла в MB (если актуально)
+          example: 10
+          nullable: true
+        details:
+          type: object
+          description: Дополнительные детали ошибки (опционально)
+          additionalProperties: true
+    SuccessResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+    TelegramId:
+      type: string
+      description: Telegram ID пользователя
+      example: '123456789'
+  responses:
+    InternalServerError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: internal_error
+            message: Internal server error
+tags:
+  - name: Auth
+    description: Авторизация и инициализация пользователя
+  - name: System
+    description: Системные функции
+  - name: Payments
+    description: Оплата + вебхуки
+  - name: Profile
+    description: Профиль пользователя
+  - name: Subscribe
+    description: Действия с подпиской
+  - name: Runes
+    description: Ежедневные руны
+  - name: Crystal
+    description: Покупка кристаллов
+  - name: Layouts
+    description: Расклады рун и таро
+  - name: Tarot
+    description: Гадание на таро
+  - name: Horoscope
+    description: Гороскоп
+paths:
+  /auth/refresh:
+    post:
+      summary: Перевыпустить JWT по свежему Telegram initData
+      description: |
+        Используется, когда серверный JWT истёк или фронт хочет перевыпустить его без полной инициализации.
+        В body нужно передавать сырой `Telegram.WebApp.initData`, а не `initDataUnsafe`.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - initData
+              properties:
+                initData:
+                  type: string
+                  description: Сырой Telegram initData
+      responses:
+        '200':
+          description: Новый токен
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - token
+                properties:
+                  token:
+                    type: string
+                    description: Новый JWT
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  /auth/vk/refresh:
+    post:
+      summary: Перевыпустить JWT по валидным launch params VK Mini Apps
+      description: |
+        Используется, когда JWT истёк внутри VK Mini App.
+        В body нужно передавать сырую строку launch params со `sign`.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - launchParams
+              properties:
+                launchParams:
+                  type: string
+                  description: Сырая строка параметров запуска VK Mini Apps, включая `sign`
+      responses:
+        '200':
+          description: Новый токен
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - token
+                properties:
+                  token:
+                    type: string
+                    description: Новый JWT
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  /initUserDailyRuneHandler:
+    post:
+      summary: Инициализация пользователя и состояние карты Таро дня
+      description: |
+        Главная стартовая ручка приложения.
+        На успешной инициализации сервер:
+        1. Проверяет Telegram initData
+        2. Создаёт или обновляет пользователя
+        3. Возвращает JWT
+        4. Возвращает текущее состояние карты Таро дня
+
+        Если карта дня ещё не открыта, сервер вернёт:
+        - `name = "Скрытая карта"`
+        - `card_key = null`
+        - `interpretation = null`
+
+        Если включён maintenance gate и пользователь не разрешён, сервер вернёт только:
+        - `allow = false`
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - initData
+              properties:
+                initData:
+                  type: string
+                referralParam:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Инициализация успешна
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required:
+                      - allow
+                    properties:
+                      allow:
+                        type: boolean
+                        example: false
+                  - type: object
+                    required:
+                      - token
+                      - score_crystal
+                      - newUserCreated
+                      - subscriptionExpired
+                      - equip
+                      - sound
+                      - allow
+                      - name
+                      - card_key
+                      - interpretation
+                    properties:
+                      token:
+                        type: string
+                      score_crystal:
+                        type: integer
+                      newUserCreated:
+                        type: boolean
+                      subscriptionExpired:
+                        type: boolean
+                      sound:
+                        type: integer
+                      equip:
+                        type: object
+                        required:
+                          - background
+                        properties:
+                          background:
+                            type: integer
+                            description: ID экипированного background
+                      allow:
+                        type: boolean
+                      name:
+                        type: string
+                      card_key:
+                        type: string
+                        nullable: true
+                        description: Ключ карты дня, например `4` или `4*`
+                      interpretation:
+                        type: string
+                        nullable: true
+              examples:
+                hidden_card:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    score_crystal: 120
+                    newUserCreated: false
+                    subscriptionExpired: false
+                    equip:
+                      background: 1
+                    sound: 1
+                    allow: true
+                    name: Скрытая карта
+                    card_key: null
+                    interpretation: null
+                opened_card:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    score_crystal: 120
+                    newUserCreated: false
+                    subscriptionExpired: false
+                    equip:
+                      background: 6
+                    sound: 1
+                    allow: true
+                    name: Император (перевернутая)
+                    card_key: 4*
+                    interpretation: Сегодня важно не давить на события и не пытаться контролировать всех вокруг.
+  /vk/init:
+    post:
+      summary: Инициализация пользователя во VK Mini Apps и состояние карты Таро дня
+      description: |
+        Главная стартовая ручка приложения для VK Mini Apps.
+        На успешной инициализации сервер:
+        1. Проверяет подпись `sign` в launch params VK
+        2. Создаёт или обновляет пользователя
+        3. Возвращает JWT
+        4. Возвращает текущее состояние карты Таро дня
+
+        Если карта дня ещё не открыта, сервер вернёт:
+        - `name = "Скрытая карта"`
+        - `card_key = null`
+        - `interpretation = null`
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - launchParams
+              properties:
+                launchParams:
+                  type: string
+                  description: Сырая строка launch params VK Mini Apps со `sign`
+                referralParam:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Инициализация успешна
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required:
+                      - allow
+                    properties:
+                      allow:
+                        type: boolean
+                        example: false
+                  - type: object
+                    required:
+                      - token
+                      - score_crystal
+                      - newUserCreated
+                      - subscriptionExpired
+                      - equip
+                      - sound
+                      - allow
+                      - name
+                      - card_key
+                      - interpretation
+                    properties:
+                      token:
+                        type: string
+                      score_crystal:
+                        type: integer
+                      newUserCreated:
+                        type: boolean
+                      subscriptionExpired:
+                        type: boolean
+                      sound:
+                        type: integer
+                      equip:
+                        type: object
+                        required:
+                          - background
+                        properties:
+                          background:
+                            type: integer
+                            description: ID экипированного background
+                      allow:
+                        type: boolean
+                      name:
+                        type: string
+                      card_key:
+                        type: string
+                        nullable: true
+                      interpretation:
+                        type: string
+                        nullable: true
+              examples:
+                hidden_card:
+                  value:
+                    token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    score_crystal: 120
+                    newUserCreated: false
+                    subscriptionExpired: false
+                    equip:
+                      background: 1
+                    sound: 1
+                    allow: true
+                    name: Скрытая карта
+                    card_key: null
+                    interpretation: null
+  /flipRune:
+    post:
+      summary: Открыть карту Таро дня
+      description: |
+        Карта выбирается один раз и сохраняется на 24 часа от момента открытия.
+        Повторный вызов в рамках активного окна вернёт уже сохранённую карту и интерпретацию.
+      tags:
+        - Runes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Карта дня открыта
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - name
+                  - card_key
+                  - interpretation
+                properties:
+                  name:
+                    type: string
+                  card_key:
+                    type: string
+                    description: ID карты или ID со звёздочкой для перевёрнутой карты
+                  interpretation:
+                    type: string
+              example:
+                name: Сила (перевернутая)
+                card_key: 8*
+                interpretation: Сегодня лучше снизить внутреннее давление и не пытаться продавить результат силой.
+  /generate:
+    post:
+      summary: Сгенерировать рунический расклад
+      description: >
+        `useCrystals=true` используется только когда бесплатный лимит исчерпан и фронт осознанно запускает платный
+        расклад.
+
+        Для `theme=danet` сервер возвращает простой ответ `Да` или `Нет`.
+      tags:
+        - Layouts
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - theme
+                - type
+              properties:
+                theme:
+                  type: string
+                  enum:
+                    - classic
+                    - love
+                    - energy
+                    - career
+                    - danet
+                type:
+                  type: string
+                  enum:
+                    - classic
+                    - cross
+                    - pyramid
+                useCrystals:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Расклад сгенерирован
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - key
+                  - runes
+                  - description
+                  - theme
+                  - type
+                properties:
+                  key:
+                    type: string
+                    description: Ключ расклада. Для `danet` это строка `Да` или `Нет`
+                  runes:
+                    type: array
+                    items:
+                      type: string
+                  description:
+                    type: string
+                  theme:
+                    type: string
+                  type:
+                    type: string
+              examples:
+                layout:
+                  value:
+                    key: 12,49,11
+                    runes:
+                      - Йера
+                      - Одал*
+                      - Иса
+                    description: |-
+                      Связи рун в раскладе: Йера, Одал*, Иса.
+
+                      ...
+                    theme: love
+                    type: classic
+                danet:
+                  value:
+                    key: Да
+                    runes: []
+                    description: Да
+                    theme: danet
+                    type: classic
+  /layoutAllowed:
+    post:
+      summary: Проверить rolling-лимит рунических раскладов
+      description: |
+        Лимит считается не по календарным суткам, а как `24 часа с первого расклада в теме`.
+        Лимит считается по `theme`, а не по паре `theme + type`.
+        Для премиума используется отдельный лимит-антиспам.
+      tags:
+        - Layouts
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - theme
+                - type
+              properties:
+                theme:
+                  type: string
+                type:
+                  type: string
+      responses:
+        '200':
+          description: Состояние лимита
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - allowed
+                  - used
+                  - max
+                  - quota_left
+                  - window_started_at
+                  - window_expires_at
+                  - is_premium
+                properties:
+                  allowed:
+                    type: boolean
+                  used:
+                    type: integer
+                  max:
+                    type: integer
+                  quota_left:
+                    type: integer
+                  window_started_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  window_expires_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  is_premium:
+                    type: boolean
+              example:
+                allowed: true
+                used: 0
+                max: 1
+                quota_left: 1
+                window_started_at: null
+                window_expires_at: null
+                is_premium: false
+  /spread/history:
+    get:
+      summary: История рунических раскладов
+      tags:
+        - Layouts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: История, сгруппированная по датам
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: object
+              example:
+                30 марта 2026 г.:
+                  - id: 11
+                    Theme: love
+                    Type: classic
+  /spread/details/{spreadId}:
+    get:
+      summary: Детали рунического расклада
+      tags:
+        - Layouts
+      parameters:
+        - in: path
+          name: spreadId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Полное описание расклада
+          content:
+            application/json:
+              schema:
+                type: object
+              example:
+                Description: |-
+                  Связи рун в раскладе: ...
+
+                  ...
+  /profile:
+    get:
+      summary: Получить профиль пользователя
+      description: |
+        Возвращает базовый профиль и данные из `birth_profiles`, если они уже заполнены.
+        Поле `date` — это дата окончания подписки. Может быть `null`.
+      tags:
+        - Profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Профиль пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - date
+                  - birth_date
+                  - birth_time
+                  - has_exact_time
+                  - place_name
+                  - name
+                  - sex
+                properties:
+                  id:
+                    type: integer
+                  date:
+                    type: string
+                    format: date
+                    nullable: true
+                  birth_date:
+                    type: string
+                    format: date
+                    nullable: true
+                  birth_time:
+                    type: string
+                    nullable: true
+                  has_exact_time:
+                    type: boolean
+                    nullable: true
+                  place_name:
+                    type: string
+                    nullable: true
+                  name:
+                    type: string
+                    nullable: true
+                  sex:
+                    type: string
+                    nullable: true
+              example:
+                id: 4
+                date: '2026-04-30'
+                birth_date: '1997-03-14'
+                birth_time: '09:30:00'
+                has_exact_time: true
+                place_name: Самара, Самарская область, Россия
+                name: Анна
+                sex: female
+  /profile/addParam:
+    post:
+      summary: Первичное заполнение birth_profile
+      description: |
+        Ручка для первого сохранения данных профиля.
+        Нужно передавать все поля.
+
+        Если точное время рождения неизвестно:
+        - `has_exact_time = false`
+        - `birth_time_str = null`
+        Тогда сервер сам подставит техническое время `12:00`.
+      tags:
+        - Profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - sex
+                - birth_date
+                - birth_time_str
+                - has_exact_time
+                - place_name
+                - lat
+                - lon
+                - tz_name
+              properties:
+                name:
+                  type: string
+                sex:
+                  type: string
+                  enum:
+                    - male
+                    - female
+                birth_date:
+                  type: string
+                  format: date
+                birth_time_str:
+                  type: string
+                  nullable: true
+                has_exact_time:
+                  type: boolean
+                place_name:
+                  type: string
+                lat:
+                  type: number
+                lon:
+                  type: number
+                tz_name:
+                  type: string
+      responses:
+        '200':
+          description: Данные профиля сохранены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                  birth_date:
+                    type: string
+                    format: date
+                  birth_time:
+                    type: string
+                  has_exact_time:
+                    type: boolean
+                  place_name:
+                    type: string
+                  name:
+                    type: string
+                  sex:
+                    type: string
+              example:
+                user_id: 4
+                birth_date: '1997-03-14'
+                birth_time: '09:30:00'
+                has_exact_time: true
+                place_name: Самара, Самарская область, Россия
+                name: Анна
+                sex: female
+  /profile/changeParam:
+    post:
+      summary: Частично обновить birth_profile
+      description: |
+        Можно отправлять не все поля, а только те, которые реально изменились.
+        Допустим частичный patch: хоть одно поле, хоть несколько.
+
+        Примеры:
+        - поменять только `name`
+        - поменять только `sex`
+        - поменять только `birth_time_str`
+        - поменять сразу `place_name`, `lat`, `lon`, `tz_name`
+      tags:
+        - Profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                sex:
+                  type: string
+                  enum:
+                    - male
+                    - female
+                birth_date:
+                  type: string
+                  format: date
+                birth_time_str:
+                  type: string
+                  nullable: true
+                has_exact_time:
+                  type: boolean
+                place_name:
+                  type: string
+                lat:
+                  type: number
+                lon:
+                  type: number
+                tz_name:
+                  type: string
+            examples:
+              only_name:
+                value:
+                  name: Илья
+              only_time:
+                value:
+                  birth_time_str: '18:45'
+                  has_exact_time: true
+              only_place:
+                value:
+                  place_name: Москва, Россия
+                  lat: 55.7558
+                  lon: 37.6173
+                  tz_name: Europe/Moscow
+      responses:
+        '200':
+          description: Актуальные данные профиля после обновления
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                  birth_date:
+                    type: string
+                    format: date
+                  birth_time:
+                    type: string
+                    nullable: true
+                  has_exact_time:
+                    type: boolean
+                  place_name:
+                    type: string
+                  name:
+                    type: string
+                  sex:
+                    type: string
+              example:
+                user_id: 4
+                birth_date: '1997-03-14'
+                birth_time: '18:45:00'
+                has_exact_time: true
+                place_name: Самара, Самарская область, Россия
+                name: Илья
+                sex: female
+  /shop:
+    post:
+      summary: Магазин — список товаров по типу
+      description: |
+        Возвращает товары выбранного типа. Сейчас используется `background`.
+
+        Сортировка на сервере:
+        1. `owned`
+        2. `available`
+        3. `locked`
+
+        Внутри одного статуса товары сортируются по редкости: `standart`, `rare`, `epic`, `legendary`.
+        Пользователь определяется по `Authorization: Bearer <token>`.
+      tags:
+        - Shop
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  description: Тип товаров
+                  enum:
+                    - background
+                  default: background
+            example:
+              type: background
+      responses:
+        '200':
+          description: Список товаров выбранного типа
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - type
+                    - name
+                    - description
+                    - price_crystal
+                    - rarity
+                    - status
+                    - equipped
+                  properties:
+                    id:
+                      type: integer
+                    type:
+                      type: string
+                      enum:
+                        - background
+                    name:
+                      type: string
+                    description:
+                      type: string
+                    price_crystal:
+                      type: integer
+                      description: Цена в кристаллах
+                    rarity:
+                      type: string
+                      enum:
+                        - standart
+                        - rare
+                        - epic
+                        - legendary
+                    status:
+                      type: string
+                      enum:
+                        - owned
+                        - available
+                        - locked
+                    equipped:
+                      type: boolean
+              example:
+                - id: 1
+                  type: background
+                  name: Стандартный фон
+                  description: Базовый фон
+                  price_crystal: 0
+                  rarity: standart
+                  status: owned
+                  equipped: true
+                - id: 5
+                  type: background
+                  name: Кристальный фон
+                  description: Фон с кристаллами
+                  price_crystal: 200
+                  rarity: epic
+                  status: available
+                  equipped: false
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /shop/buy:
+    post:
+      summary: Купить товар в магазине
+      description: |
+        Покупать можно только товары со статусом `available`.
+        Пользователь определяется по `Authorization: Bearer <token>`.
+        В текущей версии магазина покупка идёт за кристаллы.
+
+        Бизнес-ошибки возвращаются с HTTP 200 и отличаются по полю `status`.
+        Если RPC вернул неизвестный статус, сервер вернёт `status="error"` и поле `message`.
+      tags:
+        - Shop
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - itemId
+              properties:
+                itemId:
+                  type: integer
+                  description: ID товара из ответа `/shop`
+            example:
+              itemId: 5
+      responses:
+        '200':
+          description: Результат покупки
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required:
+                      - status
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - ok
+                          - already_bought
+                          - invalid_price
+                          - not_enough_points
+                  - type: object
+                    required:
+                      - status
+                      - crystalOffers
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - not_enough_crystals
+                      crystalOffers:
+                        type: array
+                        description: Офферы покупки кристаллов
+                        items:
+                          type: object
+                          required:
+                            - crystals
+                            - price_money
+                          properties:
+                            crystals:
+                              type: integer
+                            price_money:
+                              type: number
+                  - type: object
+                    required:
+                      - status
+                      - message
+                    properties:
+                      status:
+                        type: string
+                        enum:
+                          - error
+                      message:
+                        type: string
+              examples:
+                ok:
+                  value:
+                    status: ok
+                already_bought:
+                  value:
+                    status: already_bought
+                invalid_price:
+                  value:
+                    status: invalid_price
+                not_enough_points:
+                  summary: Legacy-статус из старой RPC-логики монет
+                  value:
+                    status: not_enough_points
+                not_enough_crystals:
+                  summary: Недостаточно кристаллов
+                  value:
+                    status: not_enough_crystals
+                    crystalOffers:
+                      - crystals: 100
+                        price_money: 99
+                      - crystals: 250
+                        price_money: 199
+                unknown_status:
+                  value:
+                    status: error
+                    message: 'Unknown status: some_status'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /equipObject:
+    post:
+      summary: Надеть предмет
+      description: |
+        Надевает предмет из инвентаря пользователя.
+        Пользователь определяется по `Authorization: Bearer <token>`.
+      tags:
+        - Shop
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - item_id
+              properties:
+                item_id:
+                  type: integer
+                  description: ID предмета из магазина/инвентаря
+            example:
+              item_id: 5
+      responses:
+        '200':
+          description: Результат RPC `equip_item`
+          content:
+            application/json:
+              schema:
+                type: string
+                description: Статус экипировки
+                enum:
+                  - ok
+                  - not_owned
+                  - invalid_item
+              examples:
+                ok:
+                  value: ok
+                not_owned:
+                  value: not_owned
+                invalid_item:
+                  value: invalid_item
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /subscribe:
+    get:
+      summary: Получить варианты подписки
+      tags:
+        - Subscribe
+      responses:
+        '200':
+          description: Список тарифов подписки
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - result
+                properties:
+                  result:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        description:
+                          type: string
+                        month:
+                          type: integer
+              example:
+                result:
+                  - id: 1
+                    description: 1 месяц Premium
+                    month: 1
+                  - id: 2
+                    description: 3 месяца Premium
+                    month: 3
+  /subscribe/buy:
+    post:
+      summary: Купить подписку
+      description: >
+        В body передаётся `id` тарифа из `/subscribe`.
+
+        Успешный ответ зависит от того, что именно возвращает RPC `subscrive_buy`, поэтому сервер прокидывает его в поле
+        `result`.
+      tags:
+        - Subscribe
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+      responses:
+        '200':
+          description: Подписка куплена
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - result
+                properties:
+                  result:
+                    description: Сырой ответ RPC `subscrive_buy`
+                    nullable: true
+              example:
+                result: true
+  /politicalAcc/{telegramId}:
+    get:
+      summary: Проверить согласие с пользовательским соглашением
+      tags:
+        - System
+      parameters:
+        - in: path
+          name: telegramId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Статус согласия
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: boolean
+              example:
+                status: true
+  /crystalMoney:
+    get:
+      summary: Пакеты кристаллов за рубли
+      tags:
+        - Crystal
+      responses:
+        '200':
+          description: Список пакетов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    crystals:
+                      type: integer
+                    price_money:
+                      type: number
+              example:
+                - id: 1
+                  crystals: 100
+                  price_money: 99
+                - id: 2
+                  crystals: 250
+                  price_money: 199
+  /crystalStars:
+    get:
+      summary: Пакеты кристаллов за Telegram Stars
+      tags:
+        - Crystal
+      responses:
+        '200':
+          description: Список пакетов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    crystals:
+                      type: integer
+                    price_stars:
+                      type: integer
+              example:
+                - id: 1
+                  crystals: 100
+                  price_stars: 50
+  /crystalVKVotes:
+    get:
+      summary: Пакеты кристаллов за голоса VK
+      tags:
+        - Crystal
+      responses:
+        '200':
+          description: Список пакетов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    crystals:
+                      type: integer
+                    price_vk_votes:
+                      type: integer
+              example:
+                - id: 1
+                  crystals: 100
+                  price_vk_votes: 15
+  /sound:
+    post:
+      summary: Изменить настройку звука
+      tags:
+        - System
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sound
+              properties:
+                sound:
+                  type: integer
+                  description: Обычно `0` или `1`
+      responses:
+        '200':
+          description: Настройка сохранена
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+              example:
+                status: ok
+  /createInvoice:
+    post:
+      summary: Создать invoice для оплаты кристаллов рублями
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - email
+              properties:
+                id:
+                  type: integer
+                email:
+                  type: string
+                discountPercent:
+                  type: number
+                  nullable: true
+      responses:
+        '200':
+          description: Ссылка на оплату создана
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invoice_url
+                  - payment_id
+                properties:
+                  invoice_url:
+                    type: string
+                  payment_id:
+                    type: string
+              example:
+                invoice_url: https://t.me/$123456
+                payment_id: '2_1234567891711791200000'
+  /createInvoiceStars:
+    post:
+      summary: Создать invoice для оплаты кристаллов звёздами
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+                discountPercent:
+                  type: number
+                  nullable: true
+      responses:
+        '200':
+          description: Ссылка на оплату создана
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invoice_url
+                  - payment_id
+                properties:
+                  invoice_url:
+                    type: string
+                  payment_id:
+                    type: string
+              example:
+                invoice_url: https://t.me/$123456
+                payment_id: '2_1234567891711791200000'
+  /createInvoiceVKVotes:
+    post:
+      summary: Создать VK order для оплаты кристаллов голосами
+      description: |
+        Возвращает `vk_item`, который фронт должен передать в `VKWebAppShowOrderBox`.
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+      responses:
+        '200':
+          description: VK order создан
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - vk_item
+                  - amount_votes
+                  - payment_id
+                properties:
+                  vk_item:
+                    type: string
+                  amount_votes:
+                    type: integer
+                  payment_id:
+                    type: string
+                  title:
+                    type: string
+                  description:
+                    type: string
+              example:
+                vk_item: payment_vk_2_1711791200000_ab12cd34ef56
+                amount_votes: 15
+                payment_id: vk_2_1711791200000_ab12cd34ef56
+                title: Покупка кристаллов
+                description: 100 кристаллов
+  /createInvoiceCrypto:
+    post:
+      summary: Создать invoice для оплаты кристаллов криптой
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+      responses:
+        '200':
+          description: Ссылка на оплату создана
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invoice_url
+                  - payment_id
+                properties:
+                  invoice_url:
+                    type: string
+                  payment_id:
+                    type: string
+              example:
+                invoice_url: https://app.cryptobot.me/invoice/...
+                payment_id: '2_1234567891711791200000'
+  /payments/yookassa/card/invoice:
+    post:
+      summary: Создать ссылку YooKassa только для оплаты картой
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - email
+              properties:
+                id:
+                  type: integer
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Ссылка на оплату создана
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invoice_url
+                  - payment_id
+                properties:
+                  invoice_url:
+                    type: string
+                  payment_id:
+                    type: string
+              example:
+                invoice_url: https://yoomoney.ru/checkout/payments/v2/contract?orderId=...
+                payment_id: yk_card_2_1711791200000_ab12cd34ef56
+  /payments/yookassa/yoomoney/invoice:
+    post:
+      summary: Создать ссылку YooKassa только для оплаты YooMoney
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - email
+              properties:
+                id:
+                  type: integer
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Ссылка на оплату создана
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invoice_url
+                  - payment_id
+                properties:
+                  invoice_url:
+                    type: string
+                  payment_id:
+                    type: string
+              example:
+                invoice_url: https://yoomoney.ru/checkout/payments/v2/contract?orderId=...
+                payment_id: yk_ym_2_1711791200000_ab12cd34ef56
+  /service/catalog:
+    get:
+      summary: Список платных консультаций
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: Список активных консультаций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    title:
+                      type: string
+                    description:
+                      type: string
+                      nullable: true
+                    price_money:
+                      type: number
+                    input_schema:
+                      type: object
+                    sort_order:
+                      type: integer
+  /service/orders/yookassa/invoice:
+    post:
+      summary: Создать YooKassa invoice для покупки консультации
+      description: |
+        Один запрос для покупки консультации картой или YooMoney.
+        После успешного webhook заказ перейдёт в статус `new` и станет виден админ-ботам.
+
+        Для Telegram-пользователей перед созданием оплаты проверяется `users.username`.
+        Если username не сохранён, сервер вернёт `409 telegram_username_required`.
+        В этом случае фронту нужно показать пользователю сообщение:
+        "Для покупки консультации откройте видимость username в Telegram и перезайдите в мини-приложение."
+
+        Для VK-пользователей эта проверка не применяется, так как пользователя можно найти по VK ID.
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - service_id
+                - pay_method
+                - email
+              properties:
+                service_id:
+                  type: integer
+                pay_method:
+                  type: string
+                  enum:
+                    - card
+                    - yoomoney
+                email:
+                  type: string
+                input_data:
+                  type: object
+                  description: Необязательные входные параметры консультации
+      responses:
+        '200':
+          description: Ссылка на оплату создана
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invoice_url
+                  - payment_id
+                  - order_id
+                properties:
+                  invoice_url:
+                    type: string
+                  payment_id:
+                    type: string
+                  order_id:
+                    type: integer
+              example:
+                invoice_url: https://yoomoney.ru/checkout/payments/v2/contract?orderId=...
+                payment_id: svc_card_1_1711791200000_ab12cd34ef56
+                order_id: 42
+        '409':
+          description: Telegram-пользователь не может купить консультацию без username
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                  - message
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - telegram_username_required
+                  message:
+                    type: string
+              example:
+                error: telegram_username_required
+                message: Для покупки консультации откройте видимость username в Telegram и перезайдите в мини-приложение.
+  /service/orders/{orderId}/input:
+    patch:
+      summary: Обновить входные параметры консультации
+      description: |
+        Позволяет сохранить или заменить `input_data` после создания заказа.
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input_data
+              properties:
+                input_data:
+                  type: object
+      responses:
+        '200':
+          description: Входные параметры обновлены
+  /checkPayment:
+    post:
+      summary: Проверить статус платежа
+      description: |
+        Возвращает текущее значение поля `payments.status` для указанного `payment_id`.
+        На практике это обычно строка вроде `pending` / `succeeded`.
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payment_id
+              properties:
+                payment_id:
+                  type: string
+      responses:
+        '200':
+          description: Текущий статус
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: string
+                  - type: boolean
+              examples:
+                pending:
+                  value: pending
+                succeeded:
+                  value: succeeded
+  /webhook:
+    post:
+      summary: Telegram payment webhook
+      description: Служебный webhook для Telegram-оплаты. Внешний фронт его не вызывает.
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: Webhook обработан
+  /webhooks/yookassa:
+    post:
+      summary: YooKassa webhook
+      description: Служебный webhook для подтверждения оплаты через YooKassa. Внешний фронт его не вызывает.
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: Webhook обработан
+  /webhooks/vk/payments:
+    post:
+      summary: VK payments webhook для голосов
+      description: |
+        Служебный webhook для оплаты голосами VK.
+        Поддерживает `get_item` и `order_status_change`.
+        Внешний фронт его не вызывает.
+      tags:
+        - Payments
+      responses:
+        '200':
+          description: Webhook обработан
+  /tarot/check:
+    get:
+      summary: Проверить лимит основных раскладов Таро
+      description: |
+        Возвращает остаток бесплатных основных раскладов Таро в текущем 24-часовом окне.
+        Это только проверка лимита, без генерации карт.
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Состояние лимита
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - limit_total
+                  - quota_left
+                  - pr_lim
+                properties:
+                  limit_total:
+                    type: integer
+                  quota_left:
+                    type: integer
+                  pr_lim:
+                    type: integer
+              example:
+                limit_total: 1
+                quota_left: 1
+                pr_lim: 2
+  /tarot/open:
+    post:
+      summary: Сгенерировать карты основного расклада и определить, нужна ли оплата
+      description: |
+        Сервер сразу генерирует `key` карт.
+        Если `need_payment=false`, фронт может сразу вызывать `/tarot/generate`.
+        Если `need_payment=true`, фронт должен показать цену и вызвать `/tarot/generate/pay`.
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - cross
+                    - road
+                    - railstat
+      responses:
+        '200':
+          description: Карты выбраны
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - need_payment
+                  - key
+                  - crystal
+                properties:
+                  need_payment:
+                    type: boolean
+                  key:
+                    type: string
+                    description: Набор id карт, где перевёрнутая карта помечается `*`
+                  crystal:
+                    type: integer
+              example:
+                need_payment: false
+                key: 4,11*,28,36
+                crystal: 100
+  /tarot/generate:
+    post:
+      summary: Бесплатный основной расклад Таро
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - key
+                - question
+              properties:
+                type:
+                  type: string
+                key:
+                  type: string
+                question:
+                  type: string
+      responses:
+        '200':
+          description: Основной расклад создан
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - interpretation
+                  - session_id
+                properties:
+                  interpretation:
+                    type: string
+                  session_id:
+                    type: integer
+              example:
+                interpretation: |-
+                  Карты в раскладе: Маг, Сила (перевернутая), Звезда.
+
+                  ...
+                session_id: 57
+  /tarot/generate/pay:
+    post:
+      summary: Платный основной расклад Таро
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+                - key
+                - question
+              properties:
+                type:
+                  type: string
+                key:
+                  type: string
+                question:
+                  type: string
+      responses:
+        '200':
+          description: Платный расклад создан
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - interpretation
+                  - crystal
+                  - session_id
+                properties:
+                  interpretation:
+                    type: string
+                  crystal:
+                    type: integer
+                    description: Остаток кристаллов после оплаты
+                  session_id:
+                    type: integer
+              example:
+                interpretation: |-
+                  Карты в раскладе: Маг, Сила (перевернутая), Звезда.
+
+                  ...
+                crystal: 340
+                session_id: 57
+  /tarot/generate/follow:
+    post:
+      summary: Бесплатное продолжение расклада Таро
+      description: |
+        У этой ручки два валидных успешных ответа:
+        1. `pay=false` — бесплатное продолжение создано
+        2. `pay=true` — бесплатный лимит исчерпан, фронту нужно предложить платное продолжение
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+                - question
+              properties:
+                sessionId:
+                  type: integer
+                question:
+                  type: string
+      responses:
+        '200':
+          description: Продолжение создано или требуется оплата
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required:
+                      - pay
+                      - session_id
+                      - followup_seq
+                      - card_id
+                      - card_name
+                      - interpretation
+                    properties:
+                      pay:
+                        type: boolean
+                        example: false
+                      session_id:
+                        type: integer
+                      followup_seq:
+                        type: integer
+                      card_id:
+                        type: string
+                      card_name:
+                        type: string
+                      interpretation:
+                        type: string
+                  - type: object
+                    required:
+                      - ok
+                      - pay
+                      - crystal
+                      - free_left
+                    properties:
+                      ok:
+                        type: boolean
+                      pay:
+                        type: boolean
+                        example: true
+                      crystal:
+                        type: integer
+                      free_left:
+                        type: integer
+              examples:
+                created:
+                  value:
+                    pay: false
+                    session_id: 57
+                    followup_seq: 1
+                    card_id: 42*
+                    card_name: Солнце (перевернутая)
+                    interpretation: ...
+                need_pay:
+                  value:
+                    ok: true
+                    pay: true
+                    crystal: 30
+                    free_left: 0
+  /tarot/generate/follow/pay:
+    post:
+      summary: Платное продолжение расклада Таро
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+                - question
+              properties:
+                sessionId:
+                  type: integer
+                question:
+                  type: string
+      responses:
+        '200':
+          description: Платное продолжение создано
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - session_id
+                  - followup_seq
+                  - card_id
+                  - card_name
+                  - interpretation
+                  - crystal
+                properties:
+                  ok:
+                    type: boolean
+                  session_id:
+                    type: integer
+                  followup_seq:
+                    type: integer
+                  card_id:
+                    type: string
+                  card_name:
+                    type: string
+                  interpretation:
+                    type: string
+                  crystal:
+                    type: integer
+              example:
+                ok: true
+                session_id: 57
+                followup_seq: 2
+                card_id: '15'
+                card_name: Дьявол
+                interpretation: ...
+                crystal: 310
+  /tarot/history:
+    get:
+      summary: История раскладов Таро
+      description: >
+        История возвращается по датам.
+
+        Внутри каждой даты данные сгруппированы по `sessionId`, потому что один основной расклад и его продолжения
+        относятся к одной сессии.
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: История Таро
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: array
+              example:
+                30 марта 2026 г.:
+                  - sessionId: 57
+                    items:
+                      - id: 101
+                        Theme: tarot
+                        Type: cross
+                      - id: 102
+                        Theme: tarot
+                        Type: follow
+  /tarot/history/details:
+    post:
+      summary: Детали расклада Таро
+      tags:
+        - Tarot
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - spreadId
+              properties:
+                spreadId:
+                  type: integer
+      responses:
+        '200':
+          description: Полное описание расклада
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  description:
+                    type: string
+              example:
+                description: |-
+                  Карты в раскладе: Маг, Солнце, Звезда.
+
+                  ...
+  /horoscope/open:
+    post:
+      summary: Открыть гороскоп дня
+      description: |
+        Если у пользователя нет birth_profile, сервер вернёт `has_profile=false`.
+        Если день уже доступен, сервер вернёт public и premium части в соответствии с текущими unlock-флагами.
+      tags:
+        - Horoscope
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - day
+              properties:
+                day:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Данные гороскопа
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required:
+                      - ok
+                      - has_profile
+                    properties:
+                      ok:
+                        type: boolean
+                      has_profile:
+                        type: boolean
+                        example: false
+                  - type: object
+                    required:
+                      - ok
+                      - has_profile
+                      - sign_code
+                      - is_premium
+                      - day_unlocked
+                      - premium_unlocked
+                      - can_view_public
+                      - can_view_premium
+                      - need_buy_day
+                      - need_buy_premium
+                      - general_public
+                      - general_premium
+                      - prices
+                    properties:
+                      ok:
+                        type: boolean
+                      has_profile:
+                        type: boolean
+                      sign_code:
+                        type: string
+                      is_premium:
+                        type: boolean
+                      day_unlocked:
+                        type: boolean
+                      premium_unlocked:
+                        type: boolean
+                      can_view_public:
+                        type: boolean
+                      can_view_premium:
+                        type: boolean
+                      need_buy_day:
+                        type: boolean
+                      need_buy_premium:
+                        type: boolean
+                      general_public:
+                        type: string
+                        nullable: true
+                      general_premium:
+                        type: string
+                        nullable: true
+                      prices:
+                        type: object
+              example:
+                ok: true
+                has_profile: true
+                sign_code: aries
+                is_premium: false
+                day_unlocked: true
+                premium_unlocked: false
+                can_view_public: true
+                can_view_premium: false
+                need_buy_day: false
+                need_buy_premium: true
+                general_public: Сегодня...
+                general_premium: null
+                prices:
+                  prem_horoscope_crystal: 20
+                  day_open_crystal: 20
+                  lucky_day_crystal: 30
+  /horoscope/buyHoroscopeFull:
+    post:
+      summary: Купить premium-часть гороскопа дня
+      tags:
+        - Horoscope
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - day
+              properties:
+                day:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Premium-часть открыта
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - crystal
+                  - general_premium
+                properties:
+                  ok:
+                    type: boolean
+                  crystal:
+                    type: integer
+                  general_premium:
+                    type: string
+                    nullable: true
+              example:
+                ok: true
+                crystal: 340
+                general_premium: Твоя природная склонность к риску сегодня усиливается...
+  /horoscope/buyFutureHoroscope:
+    post:
+      summary: Купить гороскоп будущего дня
+      tags:
+        - Horoscope
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - day
+              properties:
+                day:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Будущий день открыт
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - crystal
+                  - has_profile
+                  - sign_code
+                  - day_unlocked
+                  - premium_unlocked
+                  - general_public
+                  - general_premium
+                  - prices
+                properties:
+                  ok:
+                    type: boolean
+                  crystal:
+                    type: integer
+                  has_profile:
+                    type: boolean
+                  sign_code:
+                    type: string
+                  day_unlocked:
+                    type: boolean
+                  premium_unlocked:
+                    type: boolean
+                  general_public:
+                    type: string
+                    nullable: true
+                  general_premium:
+                    type: string
+                    nullable: true
+                  prices:
+                    type: object
+              example:
+                ok: true
+                crystal: 320
+                has_profile: true
+                sign_code: aries
+                day_unlocked: true
+                premium_unlocked: false
+                general_public: Сегодня...
+                general_premium: null
+                prices:
+                  lucky_day_crystal: 30
+  /horoscope/luckyDay:
+    post:
+      summary: Подобрать удачный день
+      description: |
+        Если у пользователя нет birth_profile, сервер вернёт `ok=true` и `hasProfile=false`.
+        Иначе вернёт лучший день, top-3 и текстовую интерпретацию.
+      tags:
+        - Horoscope
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+                - range_days
+                - pay
+              properties:
+                query:
+                  type: string
+                range_days:
+                  type: integer
+                  enum:
+                    - 7
+                    - 15
+                    - 30
+                pay:
+                  type: string
+                  enum:
+                    - crystal
+                    - coin
+      responses:
+        '200':
+          description: Результат подбора удачного дня
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required:
+                      - ok
+                      - hasProfile
+                    properties:
+                      ok:
+                        type: boolean
+                      hasProfile:
+                        type: boolean
+                        example: false
+                  - type: object
+                    required:
+                      - ok
+                      - hasProfile
+                      - range_days
+                      - best_day
+                      - top3
+                      - best_text_ru
+                      - balance
+                    properties:
+                      ok:
+                        type: boolean
+                      hasProfile:
+                        type: boolean
+                      range_days:
+                        type: integer
+                      best_day:
+                        type: string
+                        format: date
+                      top3:
+                        type: array
+                        items:
+                          type: string
+                          format: date
+                      best_text_ru:
+                        type: string
+                      balance:
+                        type: object
+                        properties:
+                          crystal:
+                            type: integer
+              example:
+                ok: true
+                hasProfile: true
+                range_days: 7
+                best_day: '2026-04-02'
+                top3:
+                  - '2026-04-02'
+                  - '2026-04-04'
+                  - '2026-04-05'
+                best_text_ru: Лучший день для твоего запроса — 2 апреля...
+                balance:
+                  crystal: 290
+  /horoscope/lucky/history:
+    post:
+      summary: История запросов удачного дня
+      tags:
+        - Horoscope
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: История, сгруппированная по дате создания записи
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - groups
+                properties:
+                  ok:
+                    type: boolean
+                  groups:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                        items:
+                          type: array
+                          items:
+                            type: object
+              example:
+                ok: true
+                groups:
+                  - date: '2026-03-30'
+                    items:
+                      - id: 17
+                        created_at: '2026-03-30T09:15:00.000Z'
+                        query_ru: Когда лучше провести важный разговор?
+                        range_days: 7
+                        best_day: '2026-04-02'
+                        top3:
+                          - '2026-04-02'
+                          - '2026-04-04'
+                          - '2026-04-05'
+                        best_text_ru: Лучший день для разговора...

@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "openapi:yaml": "node scripts/generate-openapi-yaml.js"
   },
   "keywords": [],
   "author": "",
@@ -123,6 +124,7 @@
     "is-weakset": "^2.0.4",
     "isarray": "^1.0.0",
     "isstream": "^0.1.2",
+    "js-yaml": "^4.1.1",
     "jsbn": "^0.1.1",
     "json-schema": "^0.4.0",
     "json-schema-traverse": "^0.4.1",

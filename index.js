@@ -1,5 +1,6 @@
 const express = require('express');
 const helmet = require('helmet');
+const yaml = require('js-yaml');
 const TelegramBot = require('node-telegram-bot-api');
 const config = require('./config/config');
 const corsMiddleware = require('./middlewares/corsMiddleware');
@@ -23,6 +24,14 @@ const app = express();
 
 // Swagger документация
 const { swaggerSpec, swaggerUi } = require('./swagger');
+function buildOpenApiYaml() {
+  return yaml.dump(swaggerSpec, {
+    lineWidth: 120,
+    noRefs: true,
+    sortKeys: false,
+  });
+}
+
 app.use(
   '/docs',
   swaggerUi.serve,
@@ -44,11 +53,54 @@ app.use(
         color: #111 !important;
         opacity: 1 !important;
       }
+
+      .swagger-ui .topbar .download-openapi-yaml {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 16px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: #49cc90;
+        color: #111 !important;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+    `,
+    customJsStr: `
+      window.addEventListener('load', function () {
+        function addDownloadLink() {
+          var topbar = document.querySelector('.swagger-ui .topbar .wrapper') || document.querySelector('.swagger-ui .topbar');
+          if (!topbar || document.getElementById('download-openapi-yaml')) return;
+
+          var link = document.createElement('a');
+          link.id = 'download-openapi-yaml';
+          link.className = 'download-openapi-yaml';
+          link.href = '/openapi.yaml';
+          link.download = 'openapi.yaml';
+          link.textContent = 'Скачать openapi.yaml';
+          topbar.appendChild(link);
+        }
+
+        addDownloadLink();
+        setTimeout(addDownloadLink, 500);
+      });
     `,
   })
 );
 app.get('/docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+app.get('/openapi.yaml', (req, res) => {
+  res.setHeader('Content-Type', 'application/yaml; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(buildOpenApiYaml());
+});
+app.get('/openapi.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
   res.send(swaggerSpec);
 });
 
