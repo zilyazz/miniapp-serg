@@ -59,6 +59,7 @@ async function createVKInvoice(userKey, id) {
   const amountVotes = getVKVotesPrice(option);
 
   if (amountVotes <= 0) {
+    logger.error(`[vkPaymentsService] VK votes price is not set option=${id}`);
     throw new Error('VK votes price is not set for this option');
   }
 
@@ -223,12 +224,14 @@ async function markPaymentSucceeded(paymentId) {
 async function handleVKGetItem(item) {
   const payment = await getPaymentByVKItem(item);
   if (!payment) {
+    logger.error(`[vkPaymentsService] VK get_item payment not found item=${item}`);
     return buildVKErrorResponse(20, 'Product does not exist');
   }
 
   const option = await getCrystalOption(payment.id_crystal);
   const amountVotes = getVKVotesPrice(option);
   if (amountVotes <= 0) {
+    logger.error(`[vkPaymentsService] VK get_item invalid price item=${item} option=${payment.id_crystal}`);
     return buildVKErrorResponse(20, 'Product does not exist');
   }
 
@@ -246,6 +249,7 @@ async function handleVKOrderStatusChange(values) {
 
   const payment = await getPaymentByVKItem(item);
   if (!payment) {
+    logger.error(`[vkPaymentsService] VK order_status_change payment not found item=${item} order_id=${orderId}`);
     return buildVKErrorResponse(20, 'Product does not exist');
   }
 
@@ -266,6 +270,7 @@ async function handleVKWebhook(rawBody, contentType) {
   const values = parseVKWebhookBody(rawBody, contentType);
 
   if (!verifyVKWebhookSignature(values)) {
+    logger.error(`[vkPaymentsService] VK webhook bad signature notification_type=${values.get('notification_type') || ''}`);
     return buildVKErrorResponse(10, 'Bad signatures');
   }
 
@@ -279,6 +284,7 @@ async function handleVKWebhook(rawBody, contentType) {
     return handleVKOrderStatusChange(values);
   }
 
+  logger.error(`[vkPaymentsService] VK webhook unsupported notification_type=${notificationType}`);
   return buildVKErrorResponse(100, 'unsupported notification_type');
 }
 

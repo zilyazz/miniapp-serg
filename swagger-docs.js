@@ -1397,6 +1397,141 @@
 
 /**
  * @openapi
+ * /service/catalog:
+ *   get:
+ *     summary: Список платных консультаций
+ *     tags: [Payments]
+ *     responses:
+ *       200:
+ *         description: Список активных консультаций
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                   title:
+ *                     type: string
+ *                   description:
+ *                     type: string
+ *                     nullable: true
+ *                   price_money:
+ *                     type: number
+ *                   input_schema:
+ *                     type: object
+ *                   sort_order:
+ *                     type: integer
+ */
+
+/**
+ * @openapi
+ * /service/orders/yookassa/invoice:
+ *   post:
+ *     summary: Создать YooKassa invoice для покупки консультации
+ *     description: |
+ *       Один запрос для покупки консультации картой или YooMoney.
+ *       После успешного webhook заказ перейдёт в статус `new` и станет виден админ-ботам.
+ *
+ *       Для Telegram-пользователей перед созданием оплаты проверяется `users.username`.
+ *       Если username не сохранён, сервер вернёт `409 telegram_username_required`.
+ *       В этом случае фронту нужно показать пользователю сообщение:
+ *       "Для покупки консультации откройте видимость username в Telegram и перезайдите в мини-приложение."
+ *
+ *       Для VK-пользователей эта проверка не применяется, так как пользователя можно найти по VK ID.
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [service_id, pay_method, email]
+ *             properties:
+ *               service_id:
+ *                 type: integer
+ *               pay_method:
+ *                 type: string
+ *                 enum: [card, yoomoney]
+ *               email:
+ *                 type: string
+ *               input_data:
+ *                 type: object
+ *                 description: Необязательные входные параметры консультации
+ *     responses:
+ *       200:
+ *         description: Ссылка на оплату создана
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [invoice_url, payment_id, order_id]
+ *               properties:
+ *                 invoice_url:
+ *                   type: string
+ *                 payment_id:
+ *                   type: string
+ *                 order_id:
+ *                   type: integer
+ *             example:
+ *               invoice_url: "https://yoomoney.ru/checkout/payments/v2/contract?orderId=..."
+ *               payment_id: "svc_card_1_1711791200000_ab12cd34ef56"
+ *               order_id: 42
+ *       409:
+ *         description: Telegram-пользователь не может купить консультацию без username
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [error, message]
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   enum: [telegram_username_required]
+ *                 message:
+ *                   type: string
+ *             example:
+ *               error: "telegram_username_required"
+ *               message: "Для покупки консультации откройте видимость username в Telegram и перезайдите в мини-приложение."
+ */
+
+/**
+ * @openapi
+ * /service/orders/{orderId}/input:
+ *   patch:
+ *     summary: Обновить входные параметры консультации
+ *     description: |
+ *       Позволяет сохранить или заменить `input_data` после создания заказа.
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [input_data]
+ *             properties:
+ *               input_data:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Входные параметры обновлены
+ */
+
+/**
+ * @openapi
  * /checkPayment:
  *   post:
  *     summary: Проверить статус платежа

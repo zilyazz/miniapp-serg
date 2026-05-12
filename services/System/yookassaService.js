@@ -29,7 +29,7 @@ function buildAuthHeader() {
   return `Basic ${Buffer.from(`${SHOP_ID}:${SECRET_KEY}`).toString('base64')}`;
 }
 
-async function createPayment({ amountRub, description, paymentId, email, method }) {
+async function createPayment({ amountRub, description, paymentId, email, method, metadata = {}, paymentSubject = 'commodity' }) {
   ensureConfigured();
 
   const payload = {
@@ -45,6 +45,7 @@ async function createPayment({ amountRub, description, paymentId, email, method 
     description: String(description || '').trim(),
     metadata: {
       payment_id: String(paymentId || '').trim(),
+      ...metadata,
     },
     receipt: {
       customer: {
@@ -60,7 +61,7 @@ async function createPayment({ amountRub, description, paymentId, email, method 
           },
           vat_code: 1,
           payment_mode: 'full_payment',
-          payment_subject: 'commodity',
+          payment_subject: paymentSubject,
         },
       ],
     },

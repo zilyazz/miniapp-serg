@@ -153,6 +153,12 @@ app.post('/payments/yookassa/card/invoice', authMiddleware, paymentYooKassaHandl
 app.post('/payments/yookassa/yoomoney/invoice', authMiddleware, paymentYooKassaHandler.createYooMoneyInvoice);
 app.post('/webhooks/yookassa', yookassaWebhookHandler.handleWebhook);
 
+//Консультации / заказы
+const serviceOrdersHandler = require('./handlers/serviceOrdersHandler');
+app.get('/service/catalog', serviceOrdersHandler.listCatalog);
+app.post('/service/orders/yookassa/invoice', authMiddleware, serviceOrdersHandler.createYooKassaInvoice);
+app.patch('/service/orders/:orderId/input', authMiddleware, serviceOrdersHandler.updateInput);
+
 
 //Таро
 const tarot = require('./handlers/tarotHandler');
