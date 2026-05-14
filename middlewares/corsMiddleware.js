@@ -26,8 +26,7 @@ function parseAllowlist() {
 }
 
 function isTrustedVKOrigin(origin) {
-  return /^https:\/\/[a-z0-9-]+\.pages\.vk-apps\.com$/i.test(origin)
-    || /^https:\/\/[a-z0-9-]+\.vk-apps\.com$/i.test(origin);
+  return /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.vk-apps\.com$/i.test(origin);
 }
 
 const allowlist = parseAllowlist();
