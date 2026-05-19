@@ -34,3 +34,70 @@ join public.service_catalog sc on sc.id = so.service_id;
 -- update public.service_catalog
 -- set price_stars = 500
 -- where id = 1;
+
+create or replace function public.activate_service_order_payment(
+  p_payment_id text,
+  p_paid_amount numeric default null
+)
+returns table(
+  out_payment_id text,
+  out_order_id bigint,
+  out_payment_status text,
+  out_order_status text
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_payment public.payments%rowtype;
+  v_expected_amount numeric;
+  v_order_id bigint;
+begin
+  select *
+  into v_payment
+  from public.payments
+  where payment_id = p_payment_id
+  for update;
+
+  if not found then
+    raise exception 'payment_not_found';
+  end if;
+
+  select id
+  into v_order_id
+  from public.service_orders
+  where payment_id = p_payment_id
+  for update;
+
+  if v_order_id is null then
+    raise exception 'service_order_not_found';
+  end if;
+
+  if p_paid_amount is not null then
+    v_expected_amount := round(coalesce(v_payment.final_price, 0) * 100);
+    if p_paid_amount <> v_expected_amount then
+      raise exception 'payment_amount_mismatch paid=% expected=%', p_paid_amount, v_expected_amount;
+    end if;
+  end if;
+
+  update public.payments
+  set status = 'succeeded',
+      crystals_give = true,
+      updated_at = now()
+  where payment_id = p_payment_id;
+
+  update public.service_orders
+  set status = 'new',
+      paid_at = coalesce(paid_at, now()),
+      updated_at = now()
+  where id = v_order_id;
+
+  return query
+  select
+    p_payment_id,
+    v_order_id,
+    'succeeded'::text,
+    'new'::text;
+end;
+$$;

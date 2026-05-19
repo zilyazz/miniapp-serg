@@ -6,6 +6,19 @@ const telegramRelayService = require('./System/telegramRelayService');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+function compactJson(value) {
+  try {
+    return JSON.stringify(value).slice(0, 3000);
+  } catch (error) {
+    return `[unserializable: ${error.message}]`;
+  }
+}
+
+function debugTelegramPayment(message, details = {}) {
+  const line = `[TG_WEBHOOK_DEBUG] ${message} ${compactJson(details)}`;
+  console.log(line);
+  logger.error(line);
+}
 
 // Создание инвойса через Telegram
 async function createTelegramInvoice(telegramId, id, email, discountPercent = 0) {
@@ -245,6 +258,12 @@ async function WeebhookTGServiceOrder(payload, paidAmount) {
     throw payError || new Error('payment_not_found');
   }
 
+  debugTelegramPayment('service order payment row', {
+    payload,
+    paidAmount,
+    payment,
+  });
+
   if (payment.product_table !== 'service_orders') {
     logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] invalid product_table paymentId=${payload} product_table=${payment.product_table}`);
     throw new Error('invalid_service_order_payment');
@@ -257,6 +276,21 @@ async function WeebhookTGServiceOrder(payload, paidAmount) {
     logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] amount mismatch paymentId=${payload}: paid=${paidAmount}, expected=${expectedAmount}`);
     throw new Error('Payment amount mismatch');
   }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc('activate_service_order_payment', {
+    p_payment_id: payload,
+    p_paid_amount: Number(paidAmount),
+  });
+
+  if (!rpcError) {
+    debugTelegramPayment('service order activated by rpc', {
+      payload,
+      rpcData,
+    });
+    return 'Заказ активирован';
+  }
+
+  logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] activate_service_order_payment RPC failed paymentId=${payload}: ${rpcError.message}`);
 
   if (!(payment.status === 'succeeded' || payment.crystals_give)) {
     const { data: updatedPayment, error: paymentError } = await supabase
@@ -274,6 +308,11 @@ async function WeebhookTGServiceOrder(payload, paidAmount) {
       logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] payment success update failed paymentId=${payload}: ${paymentError?.message}`);
       throw paymentError || new Error('payment_success_update_failed');
     }
+
+    debugTelegramPayment('service order payment updated', {
+      payload,
+      updatedPayment,
+    });
   }
 
   const { data: updatedOrder, error: orderError } = await supabase
@@ -291,6 +330,11 @@ async function WeebhookTGServiceOrder(payload, paidAmount) {
     logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] order success update failed paymentId=${payload} order=${payment.product_id}: ${orderError?.message}`);
     throw orderError || new Error('service_order_success_update_failed');
   }
+
+  debugTelegramPayment('service order updated', {
+    payload,
+    updatedOrder,
+  });
 
   return 'Заказ активирован';
 }
