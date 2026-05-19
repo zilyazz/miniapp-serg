@@ -7,19 +7,6 @@ const createTGInvoice = require('../../services/telegramPaymentsService');
 const telegramRelayService = require('../../services/System/telegramRelayService');
 //const createStaffInvoice = require('../../services/stav/stavPaymentService');
 const webAppUrl = 'https://runessheps.ru/';
-function compactJson(value) {
-  try {
-    return JSON.stringify(value).slice(0, 3000);
-  } catch (error) {
-    return `[unserializable: ${error.message}]`;
-  }
-}
-
-function debugTelegramWebhook(message, details = {}) {
-  const line = `[TG_WEBHOOK_DEBUG] ${message} ${compactJson(details)}`;
-  console.log(line);
-  logger.error(line);
-}
 
 async function isServiceOrderPayment(paymentId) {
   const { data, error } = await supabase
@@ -71,21 +58,9 @@ module.exports = {
     //res.sendStatus(200) //!Убрал так кнопки ругаются, лучше в разных местах ставить
     try {
       const update = req.body;
-      debugTelegramWebhook('incoming update', {
-        keys: update && typeof update === 'object' ? Object.keys(update) : [],
-        has_pre_checkout_query: Boolean(update?.pre_checkout_query),
-        has_successful_payment: Boolean(update?.message?.successful_payment),
-        body: update,
-      });
       
       // Обработка pre_checkout_query
       if (update.pre_checkout_query) {
-        debugTelegramWebhook('pre_checkout_query', {
-          id: update.pre_checkout_query.id,
-          payload: update.pre_checkout_query.invoice_payload,
-          total_amount: update.pre_checkout_query.total_amount,
-          currency: update.pre_checkout_query.currency,
-        });
         await answerPreCheckoutQuery(update.pre_checkout_query.id, true);
 
         return res.sendStatus(200);; // завершаем хук
@@ -96,13 +71,6 @@ module.exports = {
         //const telegramId = update.message.from.id;
         const payload = payment.invoice_payload; 
         const paidAmount = payment.total_amount;
-        debugTelegramWebhook('successful_payment', {
-          payload,
-          paidAmount,
-          currency: payment.currency,
-          telegram_payment_charge_id: payment.telegram_payment_charge_id,
-          provider_payment_charge_id: payment.provider_payment_charge_id,
-        });
         //console.log("🚀 ~ receipt_registration:", payment.receipt_registration)
         //console.log("🚀 ~ receipt_registration:",  payment.order_info.email)
         //console.log("🚀 ~ handleWebhook: ~ paidAmount:", paidAmount)
@@ -121,11 +89,6 @@ module.exports = {
 
         const productTable = payRow?.product_table;
         const serviceOrderPayment = productTable === 'service_orders' || await isServiceOrderPayment(payload);
-        debugTelegramWebhook('payment row found', {
-          payload,
-          productTable,
-          serviceOrderPayment,
-        });
         //*СТАФ
         if (productTable === 'staf_requests') {
           await createStaffInvoice.WeebhookTGBotStaf(payload, paidAmount);
@@ -133,11 +96,7 @@ module.exports = {
         }
 
         if (serviceOrderPayment) {
-          const result = await createTGInvoice.WeebhookTGServiceOrder(payload, paidAmount);
-          debugTelegramWebhook('service order webhook handled', {
-            payload,
-            result,
-          });
+          await createTGInvoice.WeebhookTGServiceOrder(payload, paidAmount);
           return res.sendStatus(200);
         }
         //console.log("✅ Успешный платеж:");
@@ -145,12 +104,7 @@ module.exports = {
         //Обновление succeeded происходит в транзакции, вызываемой в функции далее
         //logger.info(`[webhookTGBotHandler, handleWebhook] Webhook: обновляем кристаллы после успешного платежа для paymentId = ${payload}`);
         const optionId = parseInt(payload.split('_')[0]);
-        const webhook =  await createTGInvoice.WeebhookTGBot(payload, optionId, paidAmount);
-        debugTelegramWebhook('crystal webhook handled', {
-          payload,
-          optionId,
-          result: webhook,
-        });
+        await createTGInvoice.WeebhookTGBot(payload, optionId, paidAmount);
         //logger.info(`[webhookTGBotHandler, handleWebhook] Платёж ${payload} успешно завершён, кристаллы обновленны`);
         return res.sendStatus(200);
       } 
