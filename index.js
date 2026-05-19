@@ -209,6 +209,7 @@ app.post('/webhooks/yookassa', yookassaWebhookHandler.handleWebhook);
 const serviceOrdersHandler = require('./handlers/serviceOrdersHandler');
 app.get('/service/catalog', serviceOrdersHandler.listCatalog);
 app.post('/service/orders/yookassa/invoice', authMiddleware, serviceOrdersHandler.createYooKassaInvoice);
+app.post('/service/orders/stars/invoice', authMiddleware, serviceOrdersHandler.createTelegramStarsInvoice);
 app.patch('/service/orders/:orderId/input', authMiddleware, serviceOrdersHandler.updateInput);
 
 
