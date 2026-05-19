@@ -29,6 +29,10 @@ function isTrustedVKOrigin(origin) {
   return /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.vk-apps\.com$/i.test(origin);
 }
 
+function isTrustedNetlifyOrigin(origin) {
+  return /^https:\/\/[a-z0-9-]+(?:-[a-z0-9-]+)*\.netlify\.app$/i.test(origin);
+}
+
 const allowlist = parseAllowlist();
 
 module.exports = cors({
@@ -38,7 +42,11 @@ module.exports = cors({
     }
 
     const normalizedOrigin = normalizeOrigin(origin);
-    if (allowlist.includes(normalizedOrigin) || isTrustedVKOrigin(normalizedOrigin)) {
+    if (
+      allowlist.includes(normalizedOrigin)
+      || isTrustedVKOrigin(normalizedOrigin)
+      || isTrustedNetlifyOrigin(normalizedOrigin)
+    ) {
       return callback(null, true);
     }
 
