@@ -2,7 +2,8 @@
 
 Маленький relay-сервер для Telegram Bot API, который нужно поднять на Vultr.
 
-Он нужен, чтобы основной backend на Selectel не ходил напрямую в Telegram при создании invoice для Stars.
+Он нужен, чтобы основной backend на Selectel не ходил напрямую в Telegram при создании invoice для Stars
+и при ответе на `pre_checkout_query`.
 
 ## Что делает relay
 
@@ -11,7 +12,7 @@
 - `POST /telegram/answer-precheckout` — проксирует `answerPreCheckoutQuery` в Telegram.
 - `POST /telegram/webhook` — принимает webhook от Telegram и пересылает его на основной backend.
 
-Сейчас в основном проекте через relay используется только создание ссылки для Stars.
+В основном проекте relay используется для создания Stars invoice и ответа на `pre_checkout_query`.
 
 ## Схема
 
@@ -181,7 +182,8 @@ TELEGRAM_RELAY_SECRET=<same_long_random_secret_as_on_vultr>
 
 После этого пересобрать и перезапустить основной backend.
 
-Важно: в текущем Node-коде relay используется только для `POST /createInvoiceStars`.
+Важно: в текущем Node-коде relay используется для `POST /createInvoiceStars`,
+`POST /service/orders/stars/invoice` и ответа на Telegram `pre_checkout_query`.
 
 ## 7. Проверить создание Stars invoice
 

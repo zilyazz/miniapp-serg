@@ -97,6 +97,7 @@ async function createTelegramInvoiceStars(telegramId, id, discountPercent = 0) {
     throw new Error('Invalid purchase option');
   }
   if (!option.price_stars || option.price_stars <= 0) {
+    logger.error(`[createTelegramInvoiceStars] Stars price is not set option=${id}`);
     throw new Error('Stars price is not set for this option');
   }
 
@@ -124,11 +125,11 @@ async function createTelegramInvoiceStars(telegramId, id, discountPercent = 0) {
   };
 
   let invoice_url;
-  if (telegramRelayService.isTelegramRelayConfigured()) {
+  try {
     invoice_url = await telegramRelayService.createInvoiceLinkViaRelay(payload);
-  } else {
-    const res = await axios.post(`${TELEGRAM_API}/createInvoiceLink`, payload);
-    invoice_url = res.data.result;
+  } catch (error) {
+    logger.error(`[telegramPaymentsService, createTelegramInvoiceStars] relay create invoice failed paymentId=${paymentId}: ${error.message}`);
+    throw error;
   }
 
   // КЛЮЧЕВО: чтобы НЕ менять WeebhookTGBot и его проверку суммы:
@@ -232,9 +233,69 @@ async function WeebhookTGBot(payload, optionId, paidAmount) {
   }
 }
 
+async function WeebhookTGServiceOrder(payload, paidAmount) {
+  const { data: payment, error: payError } = await supabase
+    .from('payments')
+    .select('payment_id, status, crystals_give, final_price, product_id, product_table, pay_method')
+    .eq('payment_id', payload)
+    .single();
+
+  if (payError || !payment) {
+    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] payment lookup failed paymentId=${payload}: ${payError?.message}`);
+    throw payError || new Error('payment_not_found');
+  }
+
+  if (payment.product_table !== 'service_orders') {
+    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] invalid product_table paymentId=${payload} product_table=${payment.product_table}`);
+    throw new Error('invalid_service_order_payment');
+  }
+
+  if (payment.status === 'succeeded' || payment.crystals_give) {
+    return 'Заказ уже активирован для платежа';
+  }
+
+  const expectedAmount = Math.round(Number(payment.final_price) * 100);
+  if (Number(paidAmount) !== expectedAmount) {
+    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] amount mismatch paymentId=${payload}: paid=${paidAmount}, expected=${expectedAmount}`);
+    throw new Error('Payment amount mismatch');
+  }
+
+  const now = new Date().toISOString();
+  const { error: paymentError } = await supabase
+    .from('payments')
+    .update({
+      status: 'succeeded',
+      crystals_give: true,
+      updated_at: now,
+    })
+    .eq('payment_id', payload);
+
+  if (paymentError) {
+    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] payment success update failed paymentId=${payload}: ${paymentError.message}`);
+    throw paymentError;
+  }
+
+  const { error: orderError } = await supabase
+    .from('service_orders')
+    .update({
+      status: 'new',
+      paid_at: now,
+      updated_at: now,
+    })
+    .eq('id', payment.product_id);
+
+  if (orderError) {
+    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] order success update failed order=${payment.product_id}: ${orderError.message}`);
+    throw orderError;
+  }
+
+  return 'Заказ активирован';
+}
+
 module.exports = {
 createTelegramInvoice,
 createTelegramInvoiceStars,
 createTelegramInvoiceCrypto,
 WeebhookTGBot,
+WeebhookTGServiceOrder,
 };

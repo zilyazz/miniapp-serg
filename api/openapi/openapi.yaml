@@ -1582,6 +1582,10 @@ paths:
                       nullable: true
                     price_money:
                       type: number
+                    price_stars:
+                      type: integer
+                      nullable: true
+                      description: Цена консультации в Telegram Stars. Если null, оплата Stars недоступна.
                     input_schema:
                       type: object
                     sort_order:
@@ -1648,6 +1652,95 @@ paths:
                 invoice_url: https://yoomoney.ru/checkout/payments/v2/contract?orderId=...
                 payment_id: svc_card_1_1711791200000_ab12cd34ef56
                 order_id: 42
+        '409':
+          description: Telegram-пользователь не может купить консультацию без username
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                  - message
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - telegram_username_required
+                  message:
+                    type: string
+              example:
+                error: telegram_username_required
+                message: Для покупки консультации откройте видимость username в Telegram и перезайдите в мини-приложение.
+  /service/orders/stars/invoice:
+    post:
+      summary: Создать Telegram Stars invoice для покупки консультации
+      description: |
+        Создаёт заказ консультации со статусом `pending_payment`, создаёт запись в `payments`,
+        затем вызывает Vultr relay: `TELEGRAM_RELAY_BASE_URL/telegram/create-invoice-link`.
+
+        Selectel backend не ходит напрямую в `api.telegram.org` для Stars invoice.
+        Telegram webhook приходит на Vultr, а Vultr пересылает его на Selectel `/webhook`.
+        После успешного webhook заказ перейдёт в статус `new` и станет виден админ-ботам.
+
+        Доступно только для Telegram-пользователей. Для VK используйте YooKassa/VK-методы.
+
+        Для Telegram-пользователей перед созданием оплаты проверяется `users.username`.
+        Если username не сохранён, сервер вернёт `409 telegram_username_required`.
+        В этом случае фронту нужно показать пользователю сообщение:
+        "Для покупки консультации откройте видимость username в Telegram и перезайдите в мини-приложение."
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - service_id
+              properties:
+                service_id:
+                  type: integer
+                input_data:
+                  type: object
+                  description: Необязательные входные параметры консультации
+      responses:
+        '200':
+          description: Ссылка на оплату Stars создана
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - invoice_url
+                  - payment_id
+                  - order_id
+                properties:
+                  invoice_url:
+                    type: string
+                  payment_id:
+                    type: string
+                  order_id:
+                    type: integer
+              example:
+                invoice_url: https://t.me/$...
+                payment_id: svc_stars_1_1711791200000_ab12cd34ef56
+                order_id: 42
+        '400':
+          description: Ошибка бизнес-валидации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                service_stars_price_not_set:
+                  value:
+                    error: service_stars_price_not_set
+                telegram_stars_only:
+                  value:
+                    error: telegram_stars_only
         '409':
           description: Telegram-пользователь не может купить консультацию без username
           content:
@@ -1734,7 +1827,10 @@ paths:
   /webhook:
     post:
       summary: Telegram payment webhook
-      description: Служебный webhook для Telegram-оплаты. Внешний фронт его не вызывает.
+      description: |
+        Служебный webhook для Telegram-оплаты. Внешний фронт его не вызывает.
+        В production Telegram webhook зарегистрирован на Vultr relay, а relay пересылает update сюда.
+        Поддерживает успешную оплату кристаллов и консультаций (`payments.product_table = service_orders`).
       tags:
         - Payments
       responses:

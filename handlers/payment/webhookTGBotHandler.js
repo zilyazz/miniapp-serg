@@ -1,7 +1,6 @@
 //TODO Хэндлер для обработки вебхука
 // handlers/payment/webhookHandler.js
 require('dotenv').config();
-const axios = require('axios');
 const logger = require('../../logger');
 const supabase = require('../../supabaseClient');
 const createTGInvoice = require('../../services/telegramPaymentsService');
@@ -9,18 +8,14 @@ const telegramRelayService = require('../../services/System/telegramRelayService
 //const createStaffInvoice = require('../../services/stav/stavPaymentService');
 const webAppUrl = 'https://runessheps.ru/';
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
 async function answerPreCheckoutQuery(queryId, ok = true) {
   try {
-    if (telegramRelayService.isTelegramRelayConfigured()) {
-      await telegramRelayService.answerPreCheckoutViaRelay(queryId, ok);
-    } else {
-      await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerPreCheckoutQuery`, {
-        pre_checkout_query_id: queryId,
-        ok
-      });
+    if (!telegramRelayService.isTelegramRelayConfigured()) {
+      logger.error(`[Webhook] Telegram relay is not configured for pre_checkout_query=${queryId}`);
+      return;
     }
+
+    await telegramRelayService.answerPreCheckoutViaRelay(queryId, ok);
     //console.log(`[Webhook] ✅ Ответили на pre_checkout_query: ${queryId}`);
   } catch (error) {
     logger.error(`[Webhook] ❌ Ошибка при answerPreCheckoutQuery: ${error.message}`);
@@ -61,9 +56,6 @@ module.exports = {
         const payment = update.message.successful_payment;
         //const telegramId = update.message.from.id;
         const payload = payment.invoice_payload; 
-        //console.log("🚀 ~ handleWebhook: ~ payload:", payload)
-        const optionId = parseInt(payload.split('_')[0]);
-        //console.log("🚀 ~ handleWebhook: ~ optionId:", optionId)
         const paidAmount = payment.total_amount;
         //console.log("🚀 ~ receipt_registration:", payment.receipt_registration)
         //console.log("🚀 ~ receipt_registration:",  payment.order_info.email)
@@ -88,10 +80,16 @@ module.exports = {
           await createStaffInvoice.WeebhookTGBotStaf(payload, paidAmount);
           return res.sendStatus(200);
         }
+
+        if (productTable === 'service_orders') {
+          await createTGInvoice.WeebhookTGServiceOrder(payload, paidAmount);
+          return res.sendStatus(200);
+        }
         //console.log("✅ Успешный платеж:");
         //console.log("payload:", payload);
         //Обновление succeeded происходит в транзакции, вызываемой в функции далее
         //logger.info(`[webhookTGBotHandler, handleWebhook] Webhook: обновляем кристаллы после успешного платежа для paymentId = ${payload}`);
+        const optionId = parseInt(payload.split('_')[0]);
         const webhook =  await createTGInvoice.WeebhookTGBot(payload, optionId, paidAmount);
         //logger.info(`[webhookTGBotHandler, handleWebhook] Платёж ${payload} успешно завершён, кристаллы обновленны`);
         return res.sendStatus(200);

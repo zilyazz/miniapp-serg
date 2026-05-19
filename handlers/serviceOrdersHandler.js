@@ -10,6 +10,8 @@ function isBadRequest(code) {
     'service_product_not_found',
     'service_product_inactive',
     'invalid_service_price',
+    'service_stars_price_not_set',
+    'telegram_stars_only',
     'order_id_required',
     'service_order_not_found',
   ].includes(code);
@@ -37,6 +39,24 @@ module.exports = {
       return res.json(invoice);
     } catch (error) {
       logger.error(`[serviceOrdersHandler, createYooKassaInvoice] ${error.message}`);
+      const code = error.code || error.message;
+      if (isConflict(code)) {
+        return res.status(409).json({
+          error: code,
+          message: 'Для покупки консультации откройте видимость username в Telegram и перезайдите в мини-приложение.',
+        });
+      }
+      return res.status(isBadRequest(code) ? 400 : 500).json({ error: code });
+    }
+  },
+
+  createTelegramStarsInvoice: async (req, res) => {
+    try {
+      const userKey = req.telegramId;
+      const invoice = await serviceOrdersService.createTelegramStarsInvoice(userKey, req.body || {});
+      return res.json(invoice);
+    } catch (error) {
+      logger.error(`[serviceOrdersHandler, createTelegramStarsInvoice] ${error.message}`);
       const code = error.code || error.message;
       if (isConflict(code)) {
         return res.status(409).json({
