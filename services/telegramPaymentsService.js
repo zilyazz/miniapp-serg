@@ -2,6 +2,7 @@
 const axios = require('axios');
 const supabase = require('../supabaseClient');
 const logger = require('../logger');
+const telegramRelayService = require('./System/telegramRelayService');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -122,8 +123,13 @@ async function createTelegramInvoiceStars(telegramId, id, discountPercent = 0) {
     }],
   };
 
-  const res = await axios.post(`${TELEGRAM_API}/createInvoiceLink`, payload);
-  const invoice_url = res.data.result;
+  let invoice_url;
+  if (telegramRelayService.isTelegramRelayConfigured()) {
+    invoice_url = await telegramRelayService.createInvoiceLinkViaRelay(payload);
+  } else {
+    const res = await axios.post(`${TELEGRAM_API}/createInvoiceLink`, payload);
+    invoice_url = res.data.result;
+  }
 
   // КЛЮЧЕВО: чтобы НЕ менять WeebhookTGBot и его проверку суммы:
   // он сравнивает paidAmount с final_price*100
