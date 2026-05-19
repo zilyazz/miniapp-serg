@@ -250,9 +250,7 @@ async function WeebhookTGServiceOrder(payload, paidAmount) {
     throw new Error('invalid_service_order_payment');
   }
 
-  if (payment.status === 'succeeded' || payment.crystals_give) {
-    return 'Заказ уже активирован для платежа';
-  }
+  const now = new Date().toISOString();
 
   const expectedAmount = Math.round(Number(payment.final_price) * 100);
   if (Number(paidAmount) !== expectedAmount) {
@@ -260,33 +258,38 @@ async function WeebhookTGServiceOrder(payload, paidAmount) {
     throw new Error('Payment amount mismatch');
   }
 
-  const now = new Date().toISOString();
-  const { error: paymentError } = await supabase
-    .from('payments')
-    .update({
-      status: 'succeeded',
-      crystals_give: true,
-      updated_at: now,
-    })
-    .eq('payment_id', payload);
+  if (!(payment.status === 'succeeded' || payment.crystals_give)) {
+    const { data: updatedPayment, error: paymentError } = await supabase
+      .from('payments')
+      .update({
+        status: 'succeeded',
+        crystals_give: true,
+        updated_at: now,
+      })
+      .eq('payment_id', payload)
+      .select('payment_id')
+      .single();
 
-  if (paymentError) {
-    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] payment success update failed paymentId=${payload}: ${paymentError.message}`);
-    throw paymentError;
+    if (paymentError || !updatedPayment) {
+      logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] payment success update failed paymentId=${payload}: ${paymentError?.message}`);
+      throw paymentError || new Error('payment_success_update_failed');
+    }
   }
 
-  const { error: orderError } = await supabase
+  const { data: updatedOrder, error: orderError } = await supabase
     .from('service_orders')
     .update({
       status: 'new',
       paid_at: now,
       updated_at: now,
     })
-    .eq('id', payment.product_id);
+    .eq('payment_id', payload)
+    .select('id')
+    .single();
 
-  if (orderError) {
-    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] order success update failed order=${payment.product_id}: ${orderError.message}`);
-    throw orderError;
+  if (orderError || !updatedOrder) {
+    logger.error(`[telegramPaymentsService, WeebhookTGServiceOrder] order success update failed paymentId=${payload} order=${payment.product_id}: ${orderError?.message}`);
+    throw orderError || new Error('service_order_success_update_failed');
   }
 
   return 'Заказ активирован';
