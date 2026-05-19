@@ -40,7 +40,50 @@ async function createInvoiceLinkViaRelay(payload) {
   return String(responseData.result).trim();
 }
 
+async function answerPreCheckoutViaRelay(preCheckoutQueryId, ok = true, errorMessage = '') {
+  if (!isTelegramRelayConfigured()) {
+    const err = new Error('telegram_relay_not_configured');
+    err.code = 'telegram_relay_not_configured';
+    throw err;
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (TELEGRAM_RELAY_SECRET) {
+    headers['X-Relay-Secret'] = TELEGRAM_RELAY_SECRET;
+  }
+
+  const payload = {
+    pre_checkout_query_id: preCheckoutQueryId,
+    ok,
+  };
+
+  if (!ok && errorMessage) {
+    payload.error_message = errorMessage;
+  }
+
+  const response = await axios.post(
+    `${TELEGRAM_RELAY_BASE_URL}/telegram/answer-precheckout`,
+    payload,
+    { headers }
+  );
+
+  const responseData = response?.data || {};
+  if (!responseData.ok) {
+    const err = new Error(
+      `telegram_relay_answer_precheckout_failed: ${String(responseData.description || 'empty result').trim()}`
+    );
+    err.code = 'telegram_relay_answer_precheckout_failed';
+    throw err;
+  }
+
+  return responseData.result;
+}
+
 module.exports = {
   isTelegramRelayConfigured,
   createInvoiceLinkViaRelay,
+  answerPreCheckoutViaRelay,
 };

@@ -1,0 +1,14 @@
+services:
+  tg-relay-serg:
+    build: .
+    container_name: miniapp-serg-tg-relay
+    restart: unless-stopped
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      RELAY_SECRET: ${RELAY_SECRET}
+      FORWARD_WEBHOOK_URL: ${FORWARD_WEBHOOK_URL}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      TELEGRAM_TIMEOUT_SEC: ${TELEGRAM_TIMEOUT_SEC:-30}
+      FORWARD_TIMEOUT_SEC: ${FORWARD_TIMEOUT_SEC:-15}
+    ports:
+      - "8086:8085"

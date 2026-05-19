@@ -5,6 +5,7 @@ const axios = require('axios');
 const logger = require('../../logger');
 const supabase = require('../../supabaseClient');
 const createTGInvoice = require('../../services/telegramPaymentsService');
+const telegramRelayService = require('../../services/System/telegramRelayService');
 //const createStaffInvoice = require('../../services/stav/stavPaymentService');
 const webAppUrl = 'https://runessheps.ru/';
 
@@ -12,10 +13,14 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 async function answerPreCheckoutQuery(queryId, ok = true) {
   try {
-    await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerPreCheckoutQuery`, {
-      pre_checkout_query_id: queryId,
-      ok
-    });
+    if (telegramRelayService.isTelegramRelayConfigured()) {
+      await telegramRelayService.answerPreCheckoutViaRelay(queryId, ok);
+    } else {
+      await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/answerPreCheckoutQuery`, {
+        pre_checkout_query_id: queryId,
+        ok
+      });
+    }
     //console.log(`[Webhook] ✅ Ответили на pre_checkout_query: ${queryId}`);
   } catch (error) {
     logger.error(`[Webhook] ❌ Ошибка при answerPreCheckoutQuery: ${error.message}`);
