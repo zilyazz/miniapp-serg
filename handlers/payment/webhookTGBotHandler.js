@@ -6,7 +6,7 @@ const supabase = require('../../supabaseClient');
 const createTGInvoice = require('../../services/telegramPaymentsService');
 const telegramRelayService = require('../../services/System/telegramRelayService');
 //const createStaffInvoice = require('../../services/stav/stavPaymentService');
-const webAppUrl = 'https://runessheps.ru/';
+const webAppUrl = 'https://natalia-vesper-mini-app.netlify.app';
 
 async function isServiceOrderPayment(paymentId) {
   const { data, error } = await supabase
@@ -127,14 +127,14 @@ module.exports = {
         
         await bot.sendMessage(chatId,
           
-          `🛡 Добро пожаловать в ShepsRunes!\n\n` +
-          `🔮 Рунические расклады с Олегом Шепсом прямо в Telegram\n` +
-          `✨ Погрузитесь в мир магии`,
+          `🌙 Добро пожаловать во Вселенную АстроВеспер!\n\n` +
+          `🔮 Вся астрология в одном клике в Телеграмм.n` +
+          `🔥 Личные консультации,расклады таро,прогнозы совместимости ждут тебя!`,
           {
             reply_markup: {
               inline_keyboard: [
-                [{ text: '🔮 Открыть приложение',web_app: { url: webAppUrl } }],
-                [{ text: '🕯 Поддержка', url: 'https://t.me/m/aJl8c0izMzUy' }]
+                [{ text: '💫 Открыть приложение',web_app: { url: webAppUrl } }]//,
+               // [{ text: '🕯 Поддержка', url: 'https://t.me/m/aJl8c0izMzUy' }]
               ]
             }
           }
