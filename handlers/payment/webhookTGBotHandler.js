@@ -6,7 +6,7 @@ const supabase = require('../../supabaseClient');
 const createTGInvoice = require('../../services/telegramPaymentsService');
 const telegramRelayService = require('../../services/System/telegramRelayService');
 //const createStaffInvoice = require('../../services/stav/stavPaymentService');
-const webAppUrl = 'https://natalia-vesper-mini-app.netlify.app';
+const webAppUrl = 'https://natalia-vesper-mini-app.netlify.app/';
 
 async function isServiceOrderPayment(paymentId) {
   const { data, error } = await supabase
@@ -125,20 +125,28 @@ module.exports = {
         
         await saveUserSource(userId, source);
         
-        await bot.sendMessage(chatId,
-          
+        const textMessage =
           `🌙 Добро пожаловать во Вселенную АстроВеспер!\n\n` +
-          `🔮 Вся астрология в одном клике в Телеграмм.n` +
-          `🔥 Личные консультации,расклады таро,прогнозы совместимости ждут тебя!`,
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '💫 Открыть приложение',web_app: { url: webAppUrl } }]//,
-               // [{ text: '🕯 Поддержка', url: 'https://t.me/m/aJl8c0izMzUy' }]
-              ]
-            }
-          }
-        );
+          `🔮 Вся астрология в одном клике в Телеграмм.\n` +
+          `🔥 Личные консультации, расклады таро, прогнозы совместимости ждут тебя!`;
+
+        const replyMarkup = {
+          inline_keyboard: [
+            [{ text: '💫 Открыть приложение', web_app: { url: webAppUrl } }],
+          ],
+        };
+
+        if (telegramRelayService.isTelegramRelayConfigured()) {
+          await telegramRelayService.sendMessageViaRelay({
+            chatId,
+            text: textMessage,
+            replyMarkup,
+          });
+        } else {
+          await bot.sendMessage(chatId, textMessage, {
+            reply_markup: replyMarkup,
+          });
+        }
 
         res.sendStatus(200);
         return;

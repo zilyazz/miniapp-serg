@@ -10,9 +10,11 @@
 - `GET /health` — проверка, что relay жив.
 - `POST /telegram/create-invoice-link` — проксирует `createInvoiceLink` в Telegram.
 - `POST /telegram/answer-precheckout` — проксирует `answerPreCheckoutQuery` в Telegram.
+- `POST /telegram/send-message` — проксирует `sendMessage` в Telegram.
 - `POST /telegram/webhook` — принимает webhook от Telegram и пересылает его на основной backend.
 
-В основном проекте relay используется для создания Stars invoice и ответа на `pre_checkout_query`.
+В основном проекте relay используется для создания Stars invoice, ответа на `pre_checkout_query`
+и отправки `/start`-сообщения с Web App кнопкой.
 
 ## Схема
 
@@ -183,7 +185,8 @@ TELEGRAM_RELAY_SECRET=<same_long_random_secret_as_on_vultr>
 После этого пересобрать и перезапустить основной backend.
 
 Важно: в текущем Node-коде relay используется для `POST /createInvoiceStars`,
-`POST /service/orders/stars/invoice` и ответа на Telegram `pre_checkout_query`.
+`POST /service/orders/stars/invoice`, ответа на Telegram `pre_checkout_query`
+и отправки сообщения на `/start`.
 
 ## 7. Проверить создание Stars invoice
 

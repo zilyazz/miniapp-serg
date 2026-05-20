@@ -57,6 +57,22 @@ def answer_precheckout():
     return (response.text, response.status_code, {"Content-Type": "application/json"})
 
 
+@app.post("/telegram/send-message")
+def send_message():
+    if not check_secret(request):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+    payload = request.get_json(force=True, silent=False)
+
+    response = session.post(
+        f"{TELEGRAM_BASE}/sendMessage",
+        json=payload,
+        timeout=TELEGRAM_TIMEOUT,
+    )
+
+    return (response.text, response.status_code, {"Content-Type": "application/json"})
+
+
 @app.post("/telegram/webhook")
 def telegram_webhook():
     if TELEGRAM_WEBHOOK_SECRET:
