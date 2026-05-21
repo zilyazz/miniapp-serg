@@ -4,8 +4,11 @@
  */
 
 const NEURAL_BASE_URL = (process.env.NEURAL_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
+const WEB_APP_URL = 'https://natalia-vesper-mini-app.netlify.app/';
 
 module.exports = {
+  WEB_APP_URL,
+
   /** ===========================
    * 🧾 ЦЕНЫ / РАСХОДЫ
    * =========================== */

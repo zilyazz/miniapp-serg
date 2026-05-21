@@ -1,15 +1,23 @@
 // services/pBroadcastScheduled.js
-const { Telegraf } = require('telegraf');
+const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
+const telegramRelayService = require('./telegramRelayService');
+const logger = require('../../logger');
+const { WEB_APP_URL } = require('../../utils/constants');
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-
-const webAppUrl = 'https://runessheps.ru/';
 
 const EMOJI = ["💌","🌟","✨","🪄","🔮","🧿","🌀","💜","⚡️","🔥"];
 const pickEmoji = () => EMOJI[Math.floor(Math.random() * EMOJI.length)];
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const VK_API_VERSION = process.env.VK_API_VERSION || '5.199';
+const VK_BROADCAST_ACCESS_TOKEN = (
+  process.env.VK_BROADCAST_ACCESS_TOKEN ||
+  process.env.VK_GROUP_ACCESS_TOKEN ||
+  process.env.VK_ACCESS_TOKEN ||
+  ''
+).trim();
+const ALLOWED_CHANNELS = new Set(['tg', 'vk', 'both']);
 
 async function claimDueJob() {
   const { data, error } = await supabase.rpc('claim_due_broadcast_job');
@@ -18,31 +26,54 @@ async function claimDueJob() {
   return data[0];
 }
 
-async function getRecipientsPaged() {
+function normalizeChannel(channel) {
+  const normalized = String(channel || 'tg').trim().toLowerCase();
+  return ALLOWED_CHANNELS.has(normalized) ? normalized : 'tg';
+}
+
+async function getRecipientsPaged(channel) {
   const pageSize = 1000;
   let from = 0;
   const all = [];
+  const select = channel === 'tg'
+    ? 'telegram_real'
+    : channel === 'vk'
+      ? 'vk_real'
+      : 'telegram_real, vk_real';
 
   while (true) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('users')
-      .select('telegram_real')
-      .not('telegram_real', 'is', null)
+      .select(select)
       .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
 
+    if (channel === 'tg') {
+      query = query.not('telegram_real', 'is', null);
+    } else if (channel === 'vk') {
+      query = query.not('vk_real', 'is', null);
+    } else {
+      query = query.or('telegram_real.not.is.null,vk_real.not.is.null');
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     if (!data || data.length === 0) break;
 
     for (const u of data) {
-      if (u.telegram_real != null) all.push(u.telegram_real);
+      if ((channel === 'tg' || channel === 'both') && u.telegram_real != null) {
+        all.push({ channel: 'tg', recipientId: u.telegram_real });
+      }
+      if ((channel === 'vk' || channel === 'both') && u.vk_real != null) {
+        all.push({ channel: 'vk', recipientId: u.vk_real });
+      }
     }
 
     if (data.length < pageSize) break;
     from += pageSize;
   }
 
-  return all; // [telegram_real, ...]
+  return all; // [{ channel, recipientId }, ...]
 }
 
 async function finishJob(jobId, status, errorText = null) {
@@ -69,6 +100,85 @@ async function writeJobRun({ jobId, status, okCount, failCount, startedAt, finis
   if (error) throw error;
 }
 
+function buildVKKeyboard() {
+  return {
+    inline: true,
+    buttons: [[
+      {
+        action: {
+          type: 'open_link',
+          label: '🔮 Открыть приложение',
+          link: WEB_APP_URL,
+        },
+      },
+    ]],
+  };
+}
+
+function normalizeVKText(text) {
+  return String(text || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
+async function sendTelegramBroadcastMessage(chatId, text, replyMarkup) {
+  await telegramRelayService.sendMessageViaRelay({
+    chatId,
+    text,
+    replyMarkup,
+    parseMode: 'HTML',
+    disableWebPagePreview: true,
+  });
+}
+
+async function sendVKBroadcastMessage(userId, text) {
+  if (!VK_BROADCAST_ACCESS_TOKEN) {
+    const err = new Error('vk_broadcast_access_token_missing');
+    err.code = 'vk_broadcast_access_token_missing';
+    throw err;
+  }
+
+  const params = new URLSearchParams({
+    access_token: VK_BROADCAST_ACCESS_TOKEN,
+    v: VK_API_VERSION,
+    user_id: String(userId),
+    random_id: String(Date.now() + Math.floor(Math.random() * 1000000)),
+    message: normalizeVKText(text),
+    keyboard: JSON.stringify(buildVKKeyboard()),
+  });
+
+  const response = await axios.post('https://api.vk.com/method/messages.send', params);
+  const data = response?.data || {};
+
+  if (data.error) {
+    const err = new Error(`vk_messages_send_failed: ${data.error.error_msg || data.error.error_code}`);
+    err.code = 'vk_messages_send_failed';
+    throw err;
+  }
+
+  return data.response;
+}
+
+async function sendBroadcastMessage(recipient, text, replyMarkup) {
+  if (recipient.channel === 'tg') {
+    return sendTelegramBroadcastMessage(recipient.recipientId, text, replyMarkup);
+  }
+
+  if (recipient.channel === 'vk') {
+    return sendVKBroadcastMessage(recipient.recipientId, text);
+  }
+
+  const err = new Error(`unsupported_broadcast_channel: ${recipient.channel}`);
+  err.code = 'unsupported_broadcast_channel';
+  throw err;
+}
+
 // Главная функция: выполнить scheduled-рассылки, которые "пора"
 async function pBroadcastScheduled() {
   const MAX_JOBS_PER_RUN = 10;
@@ -82,7 +192,7 @@ async function pBroadcastScheduled() {
 
   const replyMarkup = {
     inline_keyboard: [[
-      { text: '🔮 Открыть приложение', web_app: { url: webAppUrl } }
+      { text: '🔮 Открыть приложение', web_app: { url: WEB_APP_URL } }
     ]]
   };
 
@@ -102,23 +212,20 @@ async function pBroadcastScheduled() {
     let processedUsers = 0;
 
     try {
-      const users = await getRecipientsPaged();
+      const channel = normalizeChannel(job.channel);
+      const users = await getRecipientsPaged(channel);
       const totalUsers = users.length;
 
-      console.log(`[Broadcast job ${job.id}] START title="${job.title || ''}" users=${totalUsers} scheduled_at=${job.scheduled_at}`);
+      console.log(`[Broadcast job ${job.id}] START channel=${channel} title="${job.title || ''}" users=${totalUsers} scheduled_at=${job.scheduled_at}`);
 
       for (let i = 0; i < totalUsers; i += BATCH_SIZE) {
         const batch = users.slice(i, i + BATCH_SIZE);
 
-        for (const telegramReal of batch) {
+        for (const recipient of batch) {
           const text = String(job.body_html || '').replaceAll('${EMOJI}', pickEmoji());
 
           try {
-            await bot.telegram.sendMessage(telegramReal, text, {
-              parse_mode: 'HTML',
-              disable_web_page_preview: true,
-              reply_markup: replyMarkup,
-            });
+            await sendBroadcastMessage(recipient, text, replyMarkup);
             ok++;
           } catch (err) {
             if (err?.parameters?.retry_after) {
@@ -126,16 +233,14 @@ async function pBroadcastScheduled() {
               await sleep(wait);
 
               try {
-                await bot.telegram.sendMessage(telegramReal, text, {
-                  parse_mode: 'HTML',
-                  disable_web_page_preview: true,
-                  reply_markup: replyMarkup,
-                });
+                await sendBroadcastMessage(recipient, text, replyMarkup);
                 ok++;
-              } catch (_) {
+              } catch (retryError) {
+                logger.error(`[Broadcast job ${job.id}] retry send failed channel=${recipient.channel} id=${recipient.recipientId}: ${retryError.message}`);
                 fail++;
               }
             } else {
+              logger.error(`[Broadcast job ${job.id}] send failed channel=${recipient.channel} id=${recipient.recipientId}: ${err.message}`);
               fail++;
             }
           }

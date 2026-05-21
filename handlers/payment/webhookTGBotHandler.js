@@ -5,8 +5,8 @@ const logger = require('../../logger');
 const supabase = require('../../supabaseClient');
 const createTGInvoice = require('../../services/telegramPaymentsService');
 const telegramRelayService = require('../../services/System/telegramRelayService');
+const { WEB_APP_URL } = require('../../utils/constants');
 //const createStaffInvoice = require('../../services/stav/stavPaymentService');
-const webAppUrl = 'https://natalia-vesper-mini-app.netlify.app/';
 
 async function isServiceOrderPayment(paymentId) {
   const { data, error } = await supabase
@@ -132,7 +132,7 @@ module.exports = {
 
         const replyMarkup = {
           inline_keyboard: [
-            [{ text: '💫 Открыть приложение', web_app: { url: webAppUrl } }],
+            [{ text: '💫 Открыть приложение', web_app: { url: WEB_APP_URL } }],
           ],
         };
 

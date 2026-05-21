@@ -15,3 +15,4 @@
 - `2026-04-22-vk-votes-prices.sql` — добавляет отдельное поле `price_vk_votes` для цен на голоса VK.
 - `2026-05-12-service-orders.sql` — добавляет каталог консультаций, заказы и RPC-функции для админ-ботов.
 - `2026-05-19-service-orders-stars.sql` — добавляет цену консультаций в Telegram Stars и обновляет view для админ-ботов.
+- `2026-05-21-broadcast-channel.sql` — добавляет канал рассылки `tg` / `vk` / `both` и обновляет RPC для scheduled broadcast.

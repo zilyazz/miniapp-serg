@@ -2,11 +2,10 @@
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const { createClient } = require('@supabase/supabase-js');
-const { SENDLIMITS } = require('../../utils/constants');
+const { SENDLIMITS, WEB_APP_URL } = require('../../utils/constants');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-const webAppUrl = 'https://runessheps.ru/';
 
 // Сколько дней должно пройти с последней отправки
 const INTERVAL_DAYS = Number(SENDLIMITS.BROADCAST_INTERVAL_DAYS|| 2);
@@ -54,7 +53,7 @@ async function markUserSent(userId) {
       // вариант 1: web_app-кнопка
     const replyMarkup = {
       inline_keyboard: [[
-        { text: '🔮 Открыть приложение', web_app: { url: webAppUrl } }
+        { text: '🔮 Открыть приложение', web_app: { url: WEB_APP_URL } }
       ]]
     };
 

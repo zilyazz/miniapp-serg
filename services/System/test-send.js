@@ -3,11 +3,10 @@ const { Telegraf } = require('telegraf');
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
+const { WEB_APP_URL } = require('../../utils/constants');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-
-const webAppUrl = 'https://runessheps.ru/';
 
 // 📌 Фото лежит в папке uploads рядом с этим файлом
 // Например: ./uploads/tarot.jpg
@@ -34,7 +33,7 @@ async function getUsers() {
 
 const replyMarkup = {
   inline_keyboard: [[
-    { text: '🔮 Открыть приложение', web_app: { url: webAppUrl } }
+    { text: '🔮 Открыть приложение', web_app: { url: WEB_APP_URL } }
   ]]
 };
 

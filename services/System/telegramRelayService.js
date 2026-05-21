@@ -82,7 +82,7 @@ async function answerPreCheckoutViaRelay(preCheckoutQueryId, ok = true, errorMes
   return responseData.result;
 }
 
-async function sendMessageViaRelay({ chatId, text, replyMarkup }) {
+async function sendMessageViaRelay({ chatId, text, replyMarkup, parseMode, disableWebPagePreview }) {
   if (!isTelegramRelayConfigured()) {
     const err = new Error('telegram_relay_not_configured');
     err.code = 'telegram_relay_not_configured';
@@ -104,6 +104,12 @@ async function sendMessageViaRelay({ chatId, text, replyMarkup }) {
 
   if (replyMarkup) {
     payload.reply_markup = replyMarkup;
+  }
+  if (parseMode) {
+    payload.parse_mode = parseMode;
+  }
+  if (typeof disableWebPagePreview === 'boolean') {
+    payload.disable_web_page_preview = disableWebPagePreview;
   }
 
   const response = await axios.post(
