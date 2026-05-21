@@ -38,8 +38,8 @@ cron.schedule('0 2 1 * *', async () => {
 });*/
 
 // Scheduled-рассылка: каждый час в 00 минут
-cron.schedule('0 * * * *', async () => {
-//cron.schedule('*/1 * * * *', async () => {
+//cron.schedule('0 * * * *', async () => {
+cron.schedule('*/1 * * * *', async () => {
 
     if (broadcastRunning) return;
     broadcastRunning = true;
