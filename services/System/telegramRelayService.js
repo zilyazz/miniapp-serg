@@ -115,15 +115,20 @@ async function sendMessageViaRelay({ chatId, text, replyMarkup, parseMode, disab
   const response = await axios.post(
     `${TELEGRAM_RELAY_BASE_URL}/telegram/send-message`,
     payload,
-    { headers }
+    {
+      headers,
+      validateStatus: () => true,
+    }
   );
 
   const responseData = response?.data || {};
   if (!responseData.ok) {
     const err = new Error(
-      `telegram_relay_send_message_failed: ${String(responseData.description || responseData.error || 'empty result').trim()}`
+      `telegram_relay_send_message_failed: status=${response.status} ${String(responseData.description || responseData.error || 'empty result').trim()}`
     );
     err.code = 'telegram_relay_send_message_failed';
+    err.telegramStatus = response.status;
+    err.telegramResponse = responseData;
     throw err;
   }
 

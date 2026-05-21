@@ -127,14 +127,39 @@ function normalizeVKText(text) {
     .trim();
 }
 
+function normalizeTelegramPlainText(text) {
+  return normalizeVKText(text);
+}
+
 async function sendTelegramBroadcastMessage(chatId, text, replyMarkup) {
-  await telegramRelayService.sendMessageViaRelay({
-    chatId,
-    text,
-    replyMarkup,
-    parseMode: 'HTML',
-    disableWebPagePreview: true,
-  });
+  try {
+    await telegramRelayService.sendMessageViaRelay({
+      chatId,
+      text,
+      replyMarkup,
+      parseMode: 'HTML',
+      disableWebPagePreview: true,
+    });
+  } catch (error) {
+    const description = String(error.telegramResponse?.description || error.message || '');
+    const shouldRetryPlain = error.telegramStatus === 400 && (
+      description.includes("can't parse entities") ||
+      description.includes('Unsupported start tag') ||
+      description.includes('Bad Request')
+    );
+
+    if (!shouldRetryPlain) {
+      throw error;
+    }
+
+    logger.error(`[Broadcast] Telegram HTML send failed, retry plain text chat_id=${chatId}: ${description}`);
+    await telegramRelayService.sendMessageViaRelay({
+      chatId,
+      text: normalizeTelegramPlainText(text),
+      replyMarkup,
+      disableWebPagePreview: true,
+    });
+  }
 }
 
 async function sendVKBroadcastMessage(userId, text) {
