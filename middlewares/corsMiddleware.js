@@ -33,6 +33,10 @@ function isTrustedNetlifyOrigin(origin) {
   return /^https:\/\/[a-z0-9-]+(?:-[a-z0-9-]+)*\.netlify\.app$/i.test(origin);
 }
 
+function isTrustedProjectOrigin(origin) {
+  return /^https:\/\/(?:[a-z0-9-]+\.)*astrovesper\.ru$/i.test(origin);
+}
+
 const allowlist = parseAllowlist();
 
 module.exports = cors({
@@ -46,6 +50,7 @@ module.exports = cors({
       allowlist.includes(normalizedOrigin)
       || isTrustedVKOrigin(normalizedOrigin)
       || isTrustedNetlifyOrigin(normalizedOrigin)
+      || isTrustedProjectOrigin(normalizedOrigin)
     ) {
       return callback(null, true);
     }
