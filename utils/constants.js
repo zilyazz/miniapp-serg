@@ -77,10 +77,10 @@ module.exports = {
     SOVMEST_LIMIT_PREAM: 3,
     //Таро
     TAROT_MAIN_BASE_PER_DAY: 1, // Основные расклады таро в день
-    TAROT_MAIN_PREM_PER_DAY: 20,
+    TAROT_MAIN_PREM_PER_DAY: 3,
     TAROT_MAIN_WINDOW_HOURS: 24,
     TAROT_FOLLOWUP_BASE: 2,     // Лимит продолжений в день
-    TAROT_FOLLOWUP_PREAM: 40,
+    TAROT_FOLLOWUP_PREAM: 6,
     TAROT_FOLLOWUP_PER_SESSION: 2, //Лимит на кол-во продолжений в одной сессии
     TAROT_HISTORY_BASE: 5,     // Лимит на число раскладов таро в истории
     TAROT_HISTORY_PREM: 15,
