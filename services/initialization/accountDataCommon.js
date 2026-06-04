@@ -54,7 +54,7 @@ async function finalizeAccountData(row, equipMap, internalUserKey) {
   return {
     userId,
     score_crystal: row.score_crystal || 0,
-    newUserCreated: true,//!!row.is_new,
+    newUserCreated: !!row.is_new,
     subscriptionExpired,
     sound: row.sound || 1,
     allow: true,
