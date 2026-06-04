@@ -104,8 +104,8 @@ module.exports = {
     LUCKY_TAG_BONUS: 0.25,
     LUCKY_TAG_PENALTY: 0.25,
     LUCKY_MAX_ATTEMPTS: 2,
-    BACK_DAYS: 3,
-    FUTURE_DAYS: 3,
+    BACK_DAYS: 30,
+    FUTURE_DAYS: 30,
     LIMIT_HISTORY: 50,
     LIMIT_HISTORY_OFFSET: 0,
     LUCKY_NEURAL_URL: process.env.HOROSCOPE_LUCKY_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/horoscope/lucky`
