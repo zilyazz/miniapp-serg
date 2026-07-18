@@ -4,6 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 const telegramRelayService = require('./telegramRelayService');
 const logger = require('../../logger');
 const { WEB_APP_URL } = require('../../utils/constants');
+const { trackExternalCall } = require('../metrics/metricsService');
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
@@ -178,16 +179,20 @@ async function sendVKBroadcastMessage(userId, text) {
     keyboard: JSON.stringify(buildVKKeyboard()),
   });
 
-  const response = await axios.post('https://api.vk.com/method/messages.send', params);
-  const data = response?.data || {};
+  return trackExternalCall('vk_send_message', async () => {
+    const response = await axios.post('https://api.vk.com/method/messages.send', params, {
+      timeout: Number(process.env.VK_API_TIMEOUT_MS || 30000)
+    });
+    const data = response?.data || {};
 
-  if (data.error) {
-    const err = new Error(`vk_messages_send_failed: ${data.error.error_msg || data.error.error_code}`);
-    err.code = 'vk_messages_send_failed';
-    throw err;
-  }
+    if (data.error) {
+      const err = new Error(`vk_messages_send_failed: ${data.error.error_msg || data.error.error_code}`);
+      err.code = 'vk_messages_send_failed';
+      throw err;
+    }
 
-  return data.response;
+    return data.response;
+  });
 }
 
 async function sendBroadcastMessage(recipient, text, replyMarkup) {

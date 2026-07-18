@@ -5,6 +5,7 @@ const axios = require('axios');
 const logger = require('../logger');
 const logEvent = require('./System/CJM');
 const { PRICES, NEURAL } = require('../utils/constants');
+const { trackAiCall } = require('./metrics/metricsService');
 
 // **Библиотека с рунами**
 const runesFlatLibrary = JSON.parse(
@@ -63,27 +64,24 @@ async function refundRuneLayout(telegramId, amount) {
 
 //*  Вызов нейросети
 async function getNeuralInterpretation(runes, theme, type, premium) {
-  try {
-    for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
-      const response = await axios.post(NEURAL.RUNES_URL, {
+  for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await axios.post(NEURAL.RUNES_URL, {
         runes,
         theme,
         type,
         premium,
         model: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8'//'Qwen/Qwen2.5-7B-Instruct-Turbo'
+      }, {
+        timeout: NEURAL.TIMEOUT_MS
       });
-      let text = response?.data.interpretation;
+    const text = response?.data.interpretation;
 
-      if (isValidNeuralText(text)) {
-        return text
-      }
+    if (isValidNeuralText(text)) {
+      return text;
     }
-    let text = 'Не удалось получить интерпретацию.'
-    return text;
-  } catch (error) {
-    logger.error(`[runeService, getNeuralInterpretation] Ошибка при вызове нейросети: ${error.message}`);
-    return 'Не удалось получить интерпретацию.';
   }
+
+  throw new Error('invalid_response');
 }
 
 //*Функция для редактировании описания (наводим красоту) 
@@ -201,7 +199,16 @@ async function cleanDescription(interpretation) {
     cleanedDescription = cached.description;
   } else {
 
-  const interpretation = await getNeuralInterpretation(runeNames, theme, type, prem);
+  let interpretation;
+  try {
+    interpretation = await trackAiCall(
+      'runes',
+      () => getNeuralInterpretation(runeNames, theme, type, prem)
+    );
+  } catch (error) {
+    logger.error(`[runeService, getNeuralInterpretation] Ошибка при вызове нейросети: ${error.message}`);
+    interpretation = 'Не удалось получить интерпретацию.';
+  }
   
   if (interpretation === 'Не удалось получить интерпретацию.') {
     // Если ошибка — достаем ВСЕ расклады из базы с такими же параметрами

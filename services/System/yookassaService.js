@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { trackExternalCall } = require('../metrics/metricsService');
 
 const SHOP_ID = process.env.YOOKASSA_SHOP_ID;
 const SECRET_KEY = process.env.YOOKASSA_SECRET_KEY || process.env.YOOKASSA_API_KEY;
@@ -71,14 +72,17 @@ async function createPayment({ amountRub, description, paymentId, email, method,
     payload.payment_method_data = { type: method };
   }
 
-  const response = await axios.post(`${API_BASE_URL}/payments`, payload, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': buildAuthHeader(),
-      'Idempotence-Key': String(paymentId || '').trim(),
-    },
-    timeout: Number(process.env.YOOKASSA_TIMEOUT_MS || 30000),
-  });
+  const response = await trackExternalCall(
+    'yookassa_create_payment',
+    () => axios.post(`${API_BASE_URL}/payments`, payload, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': buildAuthHeader(),
+        'Idempotence-Key': String(paymentId || '').trim(),
+      },
+      timeout: Number(process.env.YOOKASSA_TIMEOUT_MS || 30000),
+    })
+  );
 
   return normalizePayment(response.data);
 }
@@ -86,12 +90,15 @@ async function createPayment({ amountRub, description, paymentId, email, method,
 async function getPayment(providerPaymentId) {
   ensureConfigured();
 
-  const response = await axios.get(`${API_BASE_URL}/payments/${String(providerPaymentId || '').trim()}`, {
-    headers: {
-      'Authorization': buildAuthHeader(),
-    },
-    timeout: Number(process.env.YOOKASSA_TIMEOUT_MS || 30000),
-  });
+  const response = await trackExternalCall(
+    'yookassa_get_payment',
+    () => axios.get(`${API_BASE_URL}/payments/${String(providerPaymentId || '').trim()}`, {
+      headers: {
+        'Authorization': buildAuthHeader(),
+      },
+      timeout: Number(process.env.YOOKASSA_TIMEOUT_MS || 30000),
+    })
+  );
 
   return normalizePayment(response.data);
 }

@@ -5,6 +5,7 @@ const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
 const logEvent = require('../System/CJM');
 const { NEURAL } = require('../../utils/constants');
+const { trackAiCall } = require('../metrics/metricsService');
 
 const TAROT_DAY_TABLE = process.env.TAROT_DAY_TABLE || 'users_tarot_day';
 const PROMPTS_TABLE = process.env.AI_PROMPTS_TABLE || 'ai_prompts';
@@ -208,10 +209,11 @@ function isValidNeuralText(text) {
 
 async function callTarotDayNeural(prompt, model) {
   for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
-    const { data } = await axios.post(TAROT_DAY_NEURAL_URL, {
-      prompt,
-      model,
-    });
+    const { data } = await axios.post(
+      TAROT_DAY_NEURAL_URL,
+      { prompt, model },
+      { timeout: NEURAL.TIMEOUT_MS }
+    );
 
     const interpretation = data?.interpretation;
     if (isValidNeuralText(interpretation)) {
@@ -242,7 +244,10 @@ async function drawTarotDay(telegramId) {
 
   const promptConfig = await getTarotDayPromptConfig();
   const prompt = buildPrompt(promptConfig.prompt, card);
-  const interpretation = await callTarotDayNeural(prompt, promptConfig.model);
+  const interpretation = await trackAiCall(
+    'tarot_day',
+    () => callTarotDayNeural(prompt, promptConfig.model)
+  );
 
   const { error } = await supabase
     .from(TAROT_DAY_TABLE)

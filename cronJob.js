@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const cleanUpSpreadHistory = require('./services/pCleanUpSpreadHistory');
 const pBroadcastScheduled = require('./services/System/pBroadcastScheduled'); //Рассылка
 const { ensureHoroscopeWindow } = require('./services/horoscope/ensureHoroscopeWindowService'); //Генерация гороскопа
+const { trackExternalCall } = require('./services/metrics/metricsService');
 
 const logger = require('./logger');
 require('dotenv').config();
@@ -17,12 +18,12 @@ cron.schedule('0 1-8 * * *', async () => {
   if (horoscopeRunning) return;
   horoscopeRunning = true;
   try {
-    console.log('Генерим гороскоп...');
-    await ensureHoroscopeWindow();
+    //console.log('Генерим гороскоп...');
+    await trackExternalCall('horoscope_cron_job', () => ensureHoroscopeWindow());
   } catch (e) {
     logger.error('ERROR! ensureHoroscopeWindow:', e.message);
   } finally {
-    console.log('Закончили генерацию гороскопа...');
+    //console.log('Закончили генерацию гороскопа...');
     horoscopeRunning = false;
   }
 }, { timezone: 'Europe/Moscow' });
@@ -45,9 +46,9 @@ cron.schedule('0 * * * *', async () => {
     broadcastRunning = true;
     
     try {
-      console.log('Запуск рассылки');
-      await pBroadcastScheduled();
-      console.log('Конец рассылки');
+      //console.log('Запуск рассылки');
+      await trackExternalCall('broadcast_cron_job', () => pBroadcastScheduled());
+      //console.log('Конец рассылки');
     } catch (e) {
       logger.error(`ERROR! pBroadcastScheduled: ${e?.message}`);
     } finally {

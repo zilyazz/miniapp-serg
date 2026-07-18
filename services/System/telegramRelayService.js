@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { trackExternalCall } = require('../metrics/metricsService');
 
 const TELEGRAM_RELAY_BASE_URL = (process.env.TELEGRAM_RELAY_BASE_URL || '').trim().replace(/\/+$/, '');
 const TELEGRAM_RELAY_SECRET = (process.env.TELEGRAM_RELAY_SECRET || '').trim();
@@ -22,22 +23,28 @@ async function createInvoiceLinkViaRelay(payload) {
     headers['X-Relay-Secret'] = TELEGRAM_RELAY_SECRET;
   }
 
-  const response = await axios.post(
-    `${TELEGRAM_RELAY_BASE_URL}/telegram/create-invoice-link`,
-    payload,
-    { headers }
+  return trackExternalCall(
+    'telegram_relay_create_invoice',
+    async () => {
+      const response = await axios.post(
+        `${TELEGRAM_RELAY_BASE_URL}/telegram/create-invoice-link`,
+        payload,
+        {
+          headers,
+          timeout: Number(process.env.TELEGRAM_RELAY_TIMEOUT_MS || 30000)
+        }
+      );
+      const responseData = response?.data || {};
+      if (!responseData.ok || !String(responseData.result || '').trim()) {
+        const err = new Error(
+          `telegram_relay_create_invoice_failed: ${String(responseData.description || 'empty result').trim()}`
+        );
+        err.code = 'telegram_relay_create_invoice_failed';
+        throw err;
+      }
+      return String(responseData.result).trim();
+    }
   );
-
-  const responseData = response?.data || {};
-  if (!responseData.ok || !String(responseData.result || '').trim()) {
-    const err = new Error(
-      `telegram_relay_create_invoice_failed: ${String(responseData.description || 'empty result').trim()}`
-    );
-    err.code = 'telegram_relay_create_invoice_failed';
-    throw err;
-  }
-
-  return String(responseData.result).trim();
 }
 
 async function answerPreCheckoutViaRelay(preCheckoutQueryId, ok = true, errorMessage = '') {
@@ -64,22 +71,28 @@ async function answerPreCheckoutViaRelay(preCheckoutQueryId, ok = true, errorMes
     payload.error_message = errorMessage;
   }
 
-  const response = await axios.post(
-    `${TELEGRAM_RELAY_BASE_URL}/telegram/answer-precheckout`,
-    payload,
-    { headers }
+  return trackExternalCall(
+    'telegram_relay_precheckout',
+    async () => {
+      const response = await axios.post(
+        `${TELEGRAM_RELAY_BASE_URL}/telegram/answer-precheckout`,
+        payload,
+        {
+          headers,
+          timeout: Number(process.env.TELEGRAM_RELAY_TIMEOUT_MS || 30000)
+        }
+      );
+      const responseData = response?.data || {};
+      if (!responseData.ok) {
+        const err = new Error(
+          `telegram_relay_answer_precheckout_failed: ${String(responseData.description || 'empty result').trim()}`
+        );
+        err.code = 'telegram_relay_answer_precheckout_failed';
+        throw err;
+      }
+      return responseData.result;
+    }
   );
-
-  const responseData = response?.data || {};
-  if (!responseData.ok) {
-    const err = new Error(
-      `telegram_relay_answer_precheckout_failed: ${String(responseData.description || 'empty result').trim()}`
-    );
-    err.code = 'telegram_relay_answer_precheckout_failed';
-    throw err;
-  }
-
-  return responseData.result;
 }
 
 async function sendMessageViaRelay({ chatId, text, replyMarkup, parseMode, disableWebPagePreview }) {
@@ -112,27 +125,31 @@ async function sendMessageViaRelay({ chatId, text, replyMarkup, parseMode, disab
     payload.disable_web_page_preview = disableWebPagePreview;
   }
 
-  const response = await axios.post(
-    `${TELEGRAM_RELAY_BASE_URL}/telegram/send-message`,
-    payload,
-    {
-      headers,
-      validateStatus: () => true,
+  return trackExternalCall(
+    'telegram_relay_send_message',
+    async () => {
+      const response = await axios.post(
+        `${TELEGRAM_RELAY_BASE_URL}/telegram/send-message`,
+        payload,
+        {
+          headers,
+          timeout: Number(process.env.TELEGRAM_RELAY_TIMEOUT_MS || 30000),
+          validateStatus: () => true,
+        }
+      );
+      const responseData = response?.data || {};
+      if (!responseData.ok) {
+        const err = new Error(
+          `telegram_relay_send_message_failed: status=${response.status} ${String(responseData.description || responseData.error || 'empty result').trim()}`
+        );
+        err.code = 'telegram_relay_send_message_failed';
+        err.telegramStatus = response.status;
+        err.telegramResponse = responseData;
+        throw err;
+      }
+      return responseData.result;
     }
   );
-
-  const responseData = response?.data || {};
-  if (!responseData.ok) {
-    const err = new Error(
-      `telegram_relay_send_message_failed: status=${response.status} ${String(responseData.description || responseData.error || 'empty result').trim()}`
-    );
-    err.code = 'telegram_relay_send_message_failed';
-    err.telegramStatus = response.status;
-    err.telegramResponse = responseData;
-    throw err;
-  }
-
-  return responseData.result;
 }
 
 module.exports = {

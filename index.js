@@ -20,6 +20,7 @@ const limiter = rateLimit({
 });
 
 require('dotenv').config(); // Загружаем переменные окружения из .en
+const { metricsMiddleware, metricsHandler } = require('./services/metrics/metricsService');
 
 const app = express();
 
@@ -139,6 +140,8 @@ app.post(
 );
 
 app.use(express.json()); // Чтобы сервер понимал JSON
+app.use(metricsMiddleware);
+app.get('/metrics', metricsHandler);
 //app.use(limiter);        //! ограниче по запросам в минуту
 app.options('*', corsMiddleware); // Обработчик preflight-запросов
 

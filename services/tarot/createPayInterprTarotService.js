@@ -5,6 +5,7 @@ const logger = require('../../logger');
 const axios = require('axios');
 const { PRICES, NEURAL } = require('../../utils/constants');
 const logEvent = require('../System/CJM');
+const { trackAiCall } = require('../metrics/metricsService');
 const tarotRaw = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../../runeLibr/tarotCards.json'), 'utf8')
 );
@@ -76,7 +77,10 @@ async function createPayInterprTarot(telegramId, type, key, question) {
   const userId      = row?.user_id;
   const crystal_res = row?.crystal;
 
-  const neural = await callNeural(cardNames,question,type,prem)
+  const neural = await trackAiCall(
+    'tarot_paid',
+    () => callNeural(cardNames, question, type, prem)
+  );
 
   if (!neural.ok) {
     // Рефандим только валюту, никаких layout_limits
@@ -168,7 +172,9 @@ async function callNeural(сards, question, spreadType, premium) {
   };
 
   for (let attempt = 0; attempt <= MAX_ATTEMPTS; attempt++) {
-    const data = await axios.post(NEURAL.TAROT_INTERPRET_URL, payload);
+    const data = await axios.post(NEURAL.TAROT_INTERPRET_URL, payload, {
+      timeout: NEURAL.TIMEOUT_MS
+    });
 
     let text = data?.data.interpretation;
 

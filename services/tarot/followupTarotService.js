@@ -5,6 +5,7 @@ const logger = require('../../logger');
 const axios = require('axios');
 const { LIMITS, PRICES, NEURAL } = require('../../utils/constants');
 const logEvent = require('../System/CJM');
+const { trackAiCall } = require('../metrics/metricsService');
 const tarotRaw = JSON.parse(
   fs.readFileSync(path.join(__dirname, '../../runeLibr/tarotCards.json'), 'utf8')
 );
@@ -164,7 +165,10 @@ async function createFollowupTarot(telegramId, sessionId, question) {
   const key  = card.keyToken;        // "42" или "42*"
 
   // 4) Нейронка
-  const neural = await callNeuralFollowup(history, card.nameForNeural, question, prem);
+  const neural = await trackAiCall(
+    'tarot_followup',
+    () => callNeuralFollowup(history, card.nameForNeural, question, prem)
+  );
   if (!neural.ok) {
     // бесплатное продолжение, денег не списывали — просто говорим, что сейчас не можем
     return { ok: false, code: 'tarot_followup_failed' };
@@ -275,7 +279,10 @@ async function createPayFollowupTarot(telegramId, sessionId, question) {
   const key  = card.keyToken;
 
   // 4) Нейронка
-  const neural = await callNeuralFollowup(history, card.nameForNeural, question, prem);
+  const neural = await trackAiCall(
+    'tarot_followup_paid',
+    () => callNeuralFollowup(history, card.nameForNeural, question, prem)
+  );
 
   if (!neural.ok) {
     // откатываем списание валюты
@@ -352,7 +359,9 @@ async function callNeuralFollowup(history, newCard, question, premium) {
       model: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8',
     };
   
-    const data = await axios.post(NEURAL.TAROT_FOLLOWUP_URL, payload);
+    const data = await axios.post(NEURAL.TAROT_FOLLOWUP_URL, payload, {
+      timeout: NEURAL.TIMEOUT_MS
+    });
 
     let text = data.data.interpretation;
 

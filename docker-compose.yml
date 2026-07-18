@@ -9,6 +9,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      METRICS_PROJECT: ${METRICS_PROJECT:-miniapp-serg}
+      METRICS_SERVICE: ${METRICS_SERVICE:-backend}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
     ports:
       - "${PORT:-8090}:${PORT:-8090}"
     networks:

@@ -2,6 +2,7 @@
 const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
 const { HOROSCOPE, NEURAL } = require('../../utils/constants');
+const { trackAiCall } = require('../metrics/metricsService');
 
 const { DateTime } = require('luxon');
 const axios = require('axios');
@@ -242,10 +243,14 @@ async function ensureHoroscopes(dateFrom, dateTo) {
     try {
       const allowedTagsSet = new Set(promptPayload.allowed_tags_en);
       const allowedScoreKeysSet = new Set(Array.from(paramDict.keys()));
-      neural = await callNeuralWithRetry(promptPayload, allowedTagsSet, allowedScoreKeysSet,1); // 1 повтор = максимум 2 попытки
+      neural = await trackAiCall(
+        'horoscope_cron',
+        () => callNeuralWithRetry(promptPayload, allowedTagsSet, allowedScoreKeysSet, 1)
+      ); // 1 повтор = максимум 2 попытки
       
     } catch (e) {
-      logger.error(`[Horoscope.ensureHoroscopes] Neural error day=${day} sign=${signCode}: ${e.message}`);
+      // AI generation failures are tracked by Prometheus and should not pollute app_log.
+      logger.warn(`[Horoscope.ensureHoroscopes] Neural generation rejected day=${day} sign=${signCode}: ${e.message}`);
       // сохраняем failed, чтобы видеть проблему
       await supabase.from('horoscopes').upsert({
         day,
@@ -392,10 +397,14 @@ async function callNeuralWithRetry(promptPayload, allowedTagsSet, allowedScoreKe
 
 async function callHoroscopeNeural(payload) {
   // Подстрой под свой нейро-роут. Я делаю аналогично твоему sonnik callNeural().
-  const { data } = await axios.post(NEURAL.HOROSCOPE_GENERATE_URL, {
-    payload,
-    model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
-  });
+  const { data } = await axios.post(
+    NEURAL.HOROSCOPE_GENERATE_URL,
+    {
+      payload,
+      model: 'Qwen/Qwen3-Next-80B-A3B-Instruct'
+    },
+    { timeout: NEURAL.TIMEOUT_MS }
+  );
   return data;
 }
 

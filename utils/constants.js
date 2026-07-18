@@ -113,6 +113,7 @@ module.exports = {
 
   NEURAL: {
     BASE_URL: NEURAL_BASE_URL,
+    TIMEOUT_MS: Number(process.env.NEURAL_TIMEOUT_MS || 120000),
     RUNES_URL: process.env.RUNES_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/divination/encode`,
     TAROT_INTERPRET_URL: process.env.TAROT_INTERPRET_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/tarot/interpret`,
     TAROT_FOLLOWUP_URL: process.env.TAROT_FOLLOWUP_NEURAL_URL || `${NEURAL_BASE_URL}/api/v1/tarot/followup`,

@@ -3,7 +3,8 @@ const supabase = require('../../supabaseClient');
 const logger = require('../../logger');
 const axios = require('axios');
 const logEvent = require('../System/CJM');
-const { HOROSCOPE,PRICES } = require('../../utils/constants');
+const { HOROSCOPE, PRICES, NEURAL } = require('../../utils/constants');
+const { trackAiCall } = require('../metrics/metricsService');
 
 async function getAllowedTags() {
   const { data, error } = await supabase
@@ -84,10 +85,14 @@ async function callLuckyNeuralWithRetry(payload, allowedTagsSet, allowedScoreKey
   
   for (let attempt = 0; attempt <= HOROSCOPE.LUCKY_MAX_ATTEMPTS; attempt++) {
     try {
-      const { data } = await axios.post(HOROSCOPE.LUCKY_NEURAL_URL, {
-        payload,
-        model: 'Qwen/Qwen3-Next-80B-A3B-Instruct'
-      });
+      const { data } = await axios.post(
+        HOROSCOPE.LUCKY_NEURAL_URL,
+        {
+          payload,
+          model: 'Qwen/Qwen3-Next-80B-A3B-Instruct'
+        },
+        { timeout: NEURAL.TIMEOUT_MS }
+      );
       //console.log("🚀 ~ callLuckyNeuralWithRetry ~ data:", data)
 
       validateNeuralLucky(data, allowedTagsSet, allowedScoreKeysSet);
@@ -220,7 +225,10 @@ async function pickLuckyDay(telegramId, queryRu, rangeDays = 7) {
   let neural;
 
   try {
-    neural = await callLuckyNeuralWithRetry(neuralPayload, allowedTagsSet, allowedScoreKeysSet);
+    neural = await trackAiCall(
+      'lucky_day',
+      () => callLuckyNeuralWithRetry(neuralPayload, allowedTagsSet, allowedScoreKeysSet)
+    );
   } catch(e) {
     await refundLuckyDay(telegramId);
     logger.error(`[luckyDayService, pickLuckyDay] neural failed telegram=${telegramId}: ${e.message}`);

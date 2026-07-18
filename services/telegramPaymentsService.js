@@ -3,6 +3,7 @@ const axios = require('axios');
 const supabase = require('../supabaseClient');
 const logger = require('../logger');
 const telegramRelayService = require('./System/telegramRelayService');
+const { trackExternalCall } = require('./metrics/metricsService');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -61,7 +62,12 @@ async function createTelegramInvoice(telegramId, id, email, discountPercent = 0)
   }
 };
 
-  const res = await axios.post(`${TELEGRAM_API}/createInvoiceLink`, payload);
+  const res = await trackExternalCall(
+    'telegram_create_invoice',
+    () => axios.post(`${TELEGRAM_API}/createInvoiceLink`, payload, {
+      timeout: Number(process.env.TELEGRAM_API_TIMEOUT_MS || 30000)
+    })
+  );
   const invoice_url = res.data.result;
 
     const {error: payInsertError} = await supabase
