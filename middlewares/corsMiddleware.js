@@ -1,4 +1,5 @@
 const cors = require('cors');
+const logger = require('../logger');
 require('dotenv').config();
 
 function normalizeOrigin(value) {
@@ -55,7 +56,8 @@ module.exports = cors({
       return callback(null, true);
     }
 
-    return callback(new Error(`CORS blocked: ${origin}`));
+    logger.warn(`[corsMiddleware] blocked origin=${origin}`);
+    return callback(null, false);
   },
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

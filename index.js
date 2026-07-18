@@ -5,6 +5,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const config = require('./config/config');
 const corsMiddleware = require('./middlewares/corsMiddleware');
 const authMiddleware = require('./middlewares/authMiddleware');
+const logger = require('./logger');
 
 //const botHandlers = require('./handlers/botHandlers');
 
@@ -21,6 +22,24 @@ const limiter = rateLimit({
 require('dotenv').config(); // Загружаем переменные окружения из .en
 
 const app = express();
+
+process.on('uncaughtException', (error) => {
+  try {
+    logger.error('[process, uncaughtException]', error);
+  } catch (logError) {
+    console.error('[process, uncaughtException] logger failed:', logError);
+  }
+  console.error('[process, uncaughtException]', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  try {
+    logger.error('[process, unhandledRejection]', reason);
+  } catch (logError) {
+    console.error('[process, unhandledRejection] logger failed:', logError);
+  }
+  console.error('[process, unhandledRejection]', reason);
+});
 
 // Swagger документация
 const { swaggerSpec, swaggerUi } = require('./swagger');
@@ -241,6 +260,34 @@ const equipObjInventory = require('./handlers/shop/equipObjectHandler');
 app.post('/equipObject', authMiddleware, equipObjInventory.getInventory); //Надеть товар 
 
 require('./cronJob'); 
+
+app.use((error, req, res, next) => {
+  if (!error) {
+    return next();
+  }
+
+  logger.error('[express, errorMiddleware]', {
+    method: req.method,
+    path: req.originalUrl,
+    message: error.message,
+    stack: error.stack,
+  });
+
+  if (error.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'bad_json' });
+  }
+
+  if (error.message && error.message.startsWith('CORS blocked:')) {
+    return res.status(403).json({ error: 'cors_blocked' });
+  }
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  return res.status(500).json({ error: 'internal_error' });
+});
+
 // Запуск сервера /*
 app.listen(config.port, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${config.port}`);
